@@ -9,7 +9,7 @@ Include `[district.server.smart-contracts]` in your CLJS file, where you use `mo
 **Warning:** district0x components are still in early stages, therefore API can change in a future.
 
 ## Usage
-You can pass following args to smart-contracts module: 
+You can pass following args to smart-contracts component: 
 * `:contracts-build-path` Path to your compiled smart contracts, where you have .bin and .abi files. (default: `"<cwd>/resources/public/contracts/build/"`)
 * `:contracts-var` Var of smart-contracts map in namespace where you want to store addresses of deployed smart-contracts
 * `:print-gas-usage?` If true, will print gas usage after each contract deployment or state function call. Useful for development. 
@@ -53,7 +53,7 @@ That's all that's needed there. Let's see how can snippet using it look like:
 (contracts/contract-call :my-contract :my-plus-function 2 3)
 ;; => 5
 
-;; The module uses just cljs-web3 under the hood, so this is equivalent to the line above
+;; The component uses just cljs-web3 under the hood, so this is equivalent to the line above
 (web3-eth/contract-call (contracts/instance :my-contract) :my-plus-function 2 3)
 ;; => 5
 
