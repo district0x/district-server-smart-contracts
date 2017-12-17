@@ -31,6 +31,7 @@ That's all that's needed there. Let's see how can snippet using it look like:
 (ns my-district
   (:require [mount.core :as mount]
             [cljs-web3.eth :as web3-eth]
+            [my-district.smart-contracts]
             [district.server.smart-contracts :as contracts]))
 
 (-> (mount/with-args
@@ -51,6 +52,7 @@ That's all that's needed there. Let's see how can snippet using it look like:
 
 ;; Persist newly deplyed contract addresses into my-district.smart-contracts namespace
 (contracts/write-smart-contracts!)
+;; (Writes into my-district.smart-contracts, figwheel reloads the file)
 
 (contracts/contract-call :my-contract :my-plus-function 2 3)
 ;; => 5
@@ -89,7 +91,7 @@ Returns contract's bin
 Returns contract's instance. If provided address, it will create instance related to given address
 
 #### `contract-call [contract-key method & args]`
-Same as you call [cljs-web3](https://github.com/district0x/cljs-web3) contract-call function, except for contract-key it's enough to pass just keyword (e.g `:my-contract`) or tuple, if you want to do it at specific address 
+Same as you call [cljs-web3](https://github.com/district0x/cljs-web3) contract-call function, except for contract-key it's enough to pass just keyword (e.g `:my-contract`) or tuple, if you want to do it at specific address   
 (e.g `[:my-contract "0x575262e80edf7d4b39d95422f86195eb4c21bb52"]`)
 
 #### `deploy-smart-contract! [contract-key opts]`
