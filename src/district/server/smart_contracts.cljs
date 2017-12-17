@@ -57,9 +57,14 @@
   (swap! (:contracts @smart-contracts) update contract-key merge contract))
 
 
-(defn- fetch-contract [file-name & [{:keys [:path]}]]
-  (let [path (or path (str (.cwd process) "/resources/public/contracts/build/"))]
-    (.readFileSync fs (str path file-name) "utf-8")))
+(defn- fetch-contract [file-name & [{:keys [:path :optional?]}]]
+  (let [path (or path (str (.cwd process) "/resources/public/contracts/build/"))
+        file-path (str path file-name)
+        exists? (if optional?
+                  (.existsSync fs file-path)
+                  true)]
+    (when exists?
+      (.readFileSync fs file-path "utf-8"))))
 
 
 (defn- fetch-abi [contract-name & [opts]]
@@ -71,9 +76,9 @@
 
 
 (defn load-contract-files [contract {:keys [:contracts-build-path]}]
-  (let [fetch-opts {:path contracts-build-path}
-        abi (fetch-abi (:name contract) fetch-opts)
-        bin (fetch-bin (:name contract) fetch-opts)]
+  (let [abi (fetch-abi (:name contract) {:path contracts-build-path})
+        bin (fetch-bin (:name contract) {:path contracts-build-path
+                                         :optional? true})]
     (merge contract
            {:abi abi
             :bin bin
@@ -113,35 +118,37 @@
 
 (defn- deploy-smart-contract* [contract-key {:keys [:placeholder-replacements :arguments]
                                              :as opts} callback]
-  (let [{:keys [:abi :bin] :as contract} (load-contract-files (contract contract-key) @smart-contracts)
-        opts (merge {:data (str "0x" (link-contract-libraries @(:contracts @smart-contracts) bin placeholder-replacements))
-                     :gas 4000000}
-                    (when-not (:from opts)
-                      {:from (first (web3-eth/accounts @web3))})
-                    opts)
-        Contract (apply web3-eth/contract-new @web3 abi (into (vec arguments) [opts]))
-        tx-hash (aget Contract "transactionHash")
-        filter-id (atom nil)]
+  (let [{:keys [:abi :bin] :as contract} (load-contract-files (contract contract-key) @smart-contracts)]
+    (when-not bin
+      (throw (js/Error. (str "Contract " contract-key " is missing bin"))))
+    (let [opts (merge {:data (str "0x" (link-contract-libraries @(:contracts @smart-contracts) bin placeholder-replacements))
+                       :gas 4000000}
+                      (when-not (:from opts)
+                        {:from (first (web3-eth/accounts @web3))})
+                      opts)
+          Contract (apply web3-eth/contract-new @web3 abi (into (vec arguments) [opts]))
+          tx-hash (aget Contract "transactionHash")
+          filter-id (atom nil)]
 
-    (if-not (fn? callback)
-      (handle-deployed-contract! contract-key contract abi tx-hash)
-      (reset!
-        filter-id
-        (web3-eth/filter
-          @web3
-          "latest"
-          (fn [err]
-            (when err
-              (callback err))
-            (try
-              (when-let [contract (handle-deployed-contract! contract-key contract abi tx-hash)]
-                (web3-eth/stop-watching! @filter-id)
-                ;; reset is needed, otherwise web3 crashes with "Can't connect to" on next request
-                ;; Reasons unknown. Needed only because of deasync hack
-                (web3/reset @web3)
-                (callback nil contract))
-              (catch js/Error err
-                (callback err)))))))))
+      (if-not (fn? callback)
+        (handle-deployed-contract! contract-key contract abi tx-hash)
+        (reset!
+          filter-id
+          (web3-eth/filter
+            @web3
+            "latest"
+            (fn [err]
+              (when err
+                (callback err))
+              (try
+                (when-let [contract (handle-deployed-contract! contract-key contract abi tx-hash)]
+                  (web3-eth/stop-watching! @filter-id)
+                  ;; reset is needed, otherwise web3 crashes with "Can't connect to" on next request
+                  ;; Reasons unknown. Needed only because of deasync hack
+                  (web3/reset @web3)
+                  (callback nil contract))
+                (catch js/Error err
+                  (callback err))))))))))
 
 
 (def deploy-smart-contract-deasynced (deasync deploy-smart-contract*))
