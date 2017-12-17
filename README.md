@@ -50,16 +50,16 @@ That's all that's needed there. Let's see how can snippet using it look like:
 (contracts/contract-address :my-contract)
 ;; => "0x575262e80edf7d4b39d95422f86195eb4c21bb52"
 
-;; Persist newly deplyed contract addresses into my-district.smart-contracts namespace
-(contracts/write-smart-contracts!)
-;; (Writes into my-district.smart-contracts, figwheel reloads the file)
-
 (contracts/contract-call :my-contract :my-plus-function 2 3)
 ;; => 5
 
 ;; The module uses just cljs-web3 under the hood, so this is equivalent to the line above
 (web3-eth/contract-call (contracts/instance :my-contract) :my-plus-function 2 3)
 ;; => 5
+
+;; Persist newly deplyed contract addresses into my-district.smart-contracts namespace
+(contracts/write-smart-contracts!)
+;; (Writes into my-district.smart-contracts, figwheel reloads the file)
 ```
 Next time you'd start the program, `:my-contract` contract would be loaded with newly deployed address.
 
