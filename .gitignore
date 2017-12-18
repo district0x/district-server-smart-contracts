@@ -9,5 +9,9 @@ pom.xml.asc
 /.nrepl-port
 .hgignore
 .hg/
-/district-server-smart-contracts.iml
 /.idea/
+/district-server-smart-contracts.iml
+/figwheel_server.log
+/tests-compiled/
+/node_modules/
+/resources/public/contracts/build/

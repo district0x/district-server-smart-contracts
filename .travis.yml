@@ -1,0 +1,14 @@
+language: clojure
+script: lein doo node "tests" once
+before_install:
+ - sudo add-apt-repository --yes ppa:ethereum/ethereum
+ - sudo apt-get -qq update
+before_script:
+  - "echo 'Installing Solc'"
+  - sudo apt-get --yes install solc
+  - "echo 'Compiling contracts'"
+  - lein compile-solidity
+  - "echo 'Installing Ganache'"
+  - npm install -g ganache-cli
+  - "echo 'Running Ganache'"
+  - ganache-cli -p 8753 > /dev/null &

@@ -43,8 +43,6 @@
 
 
 (declare contract-call)
-(declare contract-event-once)
-
 
 (defn instance
   ([contract-key]

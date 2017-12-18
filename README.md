@@ -1,5 +1,7 @@
 # district-server-smart-contracts
 
+[![Build Status](https://travis-ci.org/district0x/district-server-smart-contracts.svg?branch=master)](https://travis-ci.org/district0x/district-server-smart-contracts)
+
 Clojurescript-node.js [mount](https://github.com/tolitius/mount) component for a district server, that takes care of smart-contracts loading, deployment, function calling and event handling.
 
 ## Installation
@@ -128,6 +130,19 @@ Helps in case you have large number of events with slow callbacks, to prevent un
 ```clojure
 (-> (contracts/contract-call :my-contract :on-some-event {:from-block 0})
   (replay-past-events on-some-event {:delay 10})) ;; in ms
+```
+## Development
+```bash
+# To start REPL and run tests
+lein deps
+lein repl
+(start-tests!)
+
+# In other terminal
+node tests-compiled/run-tests.js
+
+# To run tests without REPL
+lein doo node "tests" once
 ```
 
 
