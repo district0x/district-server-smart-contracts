@@ -124,7 +124,9 @@
                       (when-not (:from opts)
                         {:from (first (web3-eth/accounts @web3))})
                       opts)
-          Contract (apply web3-eth/contract-new @web3 abi (into (vec arguments) [opts]))
+          Contract (apply web3-eth/contract-new @web3 abi (into (vec arguments) [(select-keys opts [:from :to :gas-price
+                                                                                                    :value :data :nonce
+                                                                                                    :condition])]))
           tx-hash (aget Contract "transactionHash")
           filter-id (atom nil)]
 
