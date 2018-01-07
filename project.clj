@@ -1,4 +1,4 @@
-(defproject district0x/district-server-smart-contracts "1.0.2"
+(defproject district0x/district-server-smart-contracts "1.0.3"
   :description "district0x server component for handling smart-contracts"
   :url "https://github.com/district0x/district-server-smart-contracts"
   :license {:name "Eclipse Public License"
