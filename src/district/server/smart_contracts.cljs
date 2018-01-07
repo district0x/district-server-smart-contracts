@@ -1,6 +1,5 @@
 (ns district.server.smart-contracts
   (:require
-    [cljs-web3.core :as web3]
     [cljs-web3.eth :as web3-eth]
     [cljs-web3.utils :refer [js->cljkk camel-case]]
     [cljs.core.async :refer [<! >! timeout]]
@@ -40,7 +39,6 @@
 
 (defn contract-bin [contract-key]
   (:bin (contract contract-key)))
-
 
 (declare contract-call)
 
@@ -124,7 +122,7 @@
                       (when-not (:from opts)
                         {:from (first (web3-eth/accounts @web3))})
                       opts)
-          Contract (apply web3-eth/contract-new @web3 abi (into (vec arguments) [(select-keys opts [:from :to :gas-price
+          Contract (apply web3-eth/contract-new @web3 abi (into (vec arguments) [(select-keys opts [:from :to :gas-price :gas
                                                                                                     :value :data :nonce
                                                                                                     :condition])]))
           tx-hash (aget Contract "transactionHash")
