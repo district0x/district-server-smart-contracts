@@ -41,7 +41,6 @@
 (defn contract-bin [contract-key]
   (:bin (contract contract-key)))
 
-
 (declare contract-call)
 
 (defn instance
@@ -124,7 +123,7 @@
                       (when-not (:from opts)
                         {:from (first (web3-eth/accounts @web3))})
                       opts)
-          Contract (apply web3-eth/contract-new @web3 abi (into (vec arguments) [(select-keys opts [:from :to :gas-price
+          Contract (apply web3-eth/contract-new @web3 abi (into (vec arguments) [(select-keys opts [:from :to :gas-price :gas
                                                                                                     :value :data :nonce
                                                                                                     :condition])]))
           tx-hash (aget Contract "transactionHash")
