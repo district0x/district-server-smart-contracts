@@ -1,5 +1,6 @@
 (ns district.server.smart-contracts
   (:require
+    [cljs-web3.core :as web3]
     [cljs-web3.eth :as web3-eth]
     [cljs-web3.utils :refer [js->cljkk camel-case]]
     [cljs.core.async :refer [<! >! timeout]]
