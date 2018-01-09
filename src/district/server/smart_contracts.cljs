@@ -99,7 +99,7 @@
             (let [address (if (keyword? replacement)
                             (get-in smart-contracts [replacement :address])
                             replacement)]
-              (link-library bin (string/lower-case placeholder) address)))
+              (link-library bin placeholder address)))
           bin library-placeholders))
 
 (defn- handle-deployed-contract! [contract-key contract abi tx-hash]
