@@ -111,7 +111,7 @@ Returns contract's bin
 Returns contract's instance. If provided address, it will create instance related to given address
 
 #### <a name="contract-call">`contract-call [contract-key method & args]`
-Same as you call [cljs-web3](https://github.com/district0x/cljs-web3) contract-call function, except for contract-key it's enough to pass just keyword (e.g `:my-contract`) or tuple, if you want to do it at specific address   
+Same as you call [cljs-web3](https://github.com/district0x/cljs-web3) contract-call function, except for contract-key it's enough to pass just keyword (e.g `:my-contract`) or tuple, if you want contract at specific address   
 (e.g `[:my-contract "0x575262e80edf7d4b39d95422f86195eb4c21bb52"]`)
 
 #### <a name="deploy-smart-contract!">`deploy-smart-contract! [contract-key opts]`
@@ -131,6 +131,15 @@ Deploys contract to the blockchain. Returns contract object and also stores new 
 
 #### <a name="write-smart-contracts!">`write-smart-contracts! []`
 Writes smart-contracts that are currently in module's state into file that was passed to `:contracts-var`.    
+
+#### <a name="contract-event-in-tx">`contract-event-in-tx [tx-hash contract-key event-name & args]`
+Will return first contract event with name `event-name` that occured during execution of transaction with hash `tx-hash`. This is useful, when you look for data in specific event after doing some transaction. For example in tests, or mock data generating. Advantage is that this function is synchronous, compared to setting up event filter with web3. 
+```clojure
+(let [opts {:gas 200000 :from some-address}
+      tx-hash (contracts/contract-call :my-contract :fn-that-fires-event)]
+  (contracts/contract-event-in-tx tx-hash :my-contract :TheEvent))
+  ;; {:block-number 12 :args {:a 1 :b 2} :event "TheEvent" ... }
+```
 
 
 #### <a name="replay-past-events">`replay-past-events [event-filter callback opts]`
