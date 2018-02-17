@@ -113,9 +113,9 @@ Returns contract's instance. If provided address, it will create instance relate
 #### <a name="contract-call">`contract-call [contract-key method & args]`
 Same as you call [cljs-web3](https://github.com/district0x/cljs-web3) contract-call function, except for contract-key
 you can pass following: 
-* keyword (e.g `:my-contract``)
-* tuple: keyword + address, for contract at specific address (e.g `[:my-contract "0x575262e80edf7d4b39d95422f86195eb4c21bb52"]`)
-* tuple: keyword + keyword, to use ABI from first contract and address from second contract (e.g `[:my-contract :my-other-contract]`)
+* keyword (e.g `:my-contract`)
+* tuple: keyword + address, for contract at specific address   (e.g `[:my-contract "0x575262e80edf7d4b39d95422f86195eb4c21bb52"]`)
+* tuple: keyword + keyword, to use ABI from first contract and address from second contract   (e.g `[:my-contract :my-other-contract]`)
  
 #### <a name="deploy-smart-contract!">`deploy-smart-contract! [contract-key opts]`
 Deploys contract to the blockchain. Returns contract object and also stores new address in internal state.   
