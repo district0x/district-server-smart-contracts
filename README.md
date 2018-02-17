@@ -5,7 +5,7 @@
 Clojurescript-node.js [mount](https://github.com/tolitius/mount) module for a district server, that takes care of smart-contracts loading, deployment, function calling and event handling.
 
 ## Installation
-Add `[district0x/district-server-smart-contracts "1.0.4"]` into your project.clj  
+Add `[district0x/district-server-smart-contracts "1.0.5"]` into your project.clj  
 Include `[district.server.smart-contracts]` in your CLJS file, where you use `mount/start`
 
 ## API Overview
@@ -111,9 +111,12 @@ Returns contract's bin
 Returns contract's instance. If provided address, it will create instance related to given address
 
 #### <a name="contract-call">`contract-call [contract-key method & args]`
-Same as you call [cljs-web3](https://github.com/district0x/cljs-web3) contract-call function, except for contract-key it's enough to pass just keyword (e.g `:my-contract`) or tuple, if you want contract at specific address   
-(e.g `[:my-contract "0x575262e80edf7d4b39d95422f86195eb4c21bb52"]`)
-
+Same as you call [cljs-web3](https://github.com/district0x/cljs-web3) contract-call function, except for contract-key
+you can pass following: 
+* keyword (e.g `:my-contract``)
+* tuple: keyword + address, for contract at specific address (e.g `[:my-contract "0x575262e80edf7d4b39d95422f86195eb4c21bb52"]`)
+* tuple: keyword + keyword, to use ABI from first contract and address from second contract (e.g `[:my-contract :my-other-contract]`)
+ 
 #### <a name="deploy-smart-contract!">`deploy-smart-contract! [contract-key opts]`
 Deploys contract to the blockchain. Returns contract object and also stores new address in internal state.   
 `opts:`

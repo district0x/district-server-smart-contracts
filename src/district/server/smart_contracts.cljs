@@ -46,8 +46,10 @@
 (defn instance
   ([contract-key]
    (:instance (contract contract-key)))
-  ([contract-key contract-address]
-   (web3-eth/contract-at @web3 (contract-abi contract-key) contract-address)))
+  ([contract-key contract-key-or-addr]
+   (web3-eth/contract-at @web3 (contract-abi contract-key) (if (keyword? contract-key-or-addr)
+                                                             (contract-address contract-key-or-addr)
+                                                             contract-key-or-addr))))
 
 
 (defn update-contract! [contract-key contract]
