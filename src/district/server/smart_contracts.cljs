@@ -218,14 +218,17 @@
 
 
 (defn contract-event-in-tx [tx-hash contract event-name & args]
-  (let [event-filter (apply web3-eth/contract-call (instance-from-arg contract) event-name args)
+  (let [instance (instance-from-arg contract)
+        event-filter (apply web3-eth/contract-call instance event-name args)
         formatter (aget event-filter "formatter")
-        event-name-camel (name (camel-case event-name))
-        {:keys [:logs]} (web3-eth/get-transaction-receipt @web3 tx-hash)]
+        contract-addr (aget instance "address")
+        {:keys [:logs]} (web3-eth/get-transaction-receipt @web3 tx-hash)
+        signature (aget event-filter "options" "topics" 0)]
     (reduce (fn [result log]
-              (let [{:keys [:event] :as evt} (js->clj (formatter (clj->js log)) :keywordize-keys true)]
-                (when (= event event-name-camel)
-                  (reduced evt))))
+              (when (= signature (first (:topics log)))
+                (let [{:keys [:address] :as evt} (js->clj (formatter (clj->js log)) :keywordize-keys true)]
+                  (when (= contract-addr address)
+                    (reduced evt)))))
             nil
             logs)))
 
