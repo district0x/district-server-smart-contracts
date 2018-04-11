@@ -36,6 +36,12 @@
   (let [tx-hash (contracts/contract-call :my-contract :increment-counter 2 {:gas 500000})]
     (is (string? tx-hash))
     (let [{:keys [:args]} (contracts/contract-event-in-tx tx-hash :my-contract :on-counter-incremented)]
-      (is (= 3 (.toNumber (:counter args))))))
+      (is (= 3 (.toNumber (:the-counter args))))))
 
-  (is (= 3 (.toNumber (contracts/contract-call :my-contract :counter)))))
+  (let [tx-hash (contracts/contract-call :my-contract :double-increment-counter 2 {:gas 500000})]
+    (is (string? tx-hash))
+    (is (= (map (comp #(.toNumber %) :the-counter :args)
+                (contracts/contract-events-in-tx tx-hash :my-contract :on-counter-incremented))
+           [5 7])))
+
+  (is (= 7 (.toNumber (contracts/contract-call :my-contract :counter)))))

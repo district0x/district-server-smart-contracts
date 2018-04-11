@@ -5,7 +5,7 @@
 Clojurescript-node.js [mount](https://github.com/tolitius/mount) module for a district server, that takes care of smart-contracts loading, deployment, function calling and event handling.
 
 ## Installation
-Add `[district0x/district-server-smart-contracts "1.0.6"]` into your project.clj  
+Add `[district0x/district-server-smart-contracts "1.0.7"]` into your project.clj  
 Include `[district.server.smart-contracts]` in your CLJS file, where you use `mount/start`
 
 ## API Overview
@@ -22,6 +22,7 @@ Include `[district.server.smart-contracts]` in your CLJS file, where you use `mo
   - [deploy-smart-contract!](#deploy-smart-contract!)
   - [write-smart-contracts!](#write-smart-contracts!)
   - [contract-event-in-tx](#contract-event-in-tx)
+  - [contract-events-in-tx](#contract-events-in-tx)
   - [replay-past-events](#replay-past-events)
 
 ## Real-world example
@@ -143,6 +144,9 @@ Will return first contract event with name `event-name` that occured during exec
   (contracts/contract-event-in-tx tx-hash :my-contract :TheEvent))
   ;; {:block-number 12 :args {:a 1 :b 2} :event "TheEvent" ... }
 ```
+
+#### <a name="contract-events-in-tx">`contract-events-in-tx [tx-hash contract-key event-name & args]`
+The same as `contract-event-in-tx` but instead of first event, returns collection of all events with name `event-name`
 
 
 #### <a name="replay-past-events">`replay-past-events [event-filter callback opts]`

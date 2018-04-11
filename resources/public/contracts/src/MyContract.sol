@@ -4,7 +4,7 @@ contract MyContract {
 
   uint public counter;
 
-  event onCounterIncremented(uint counter);
+  event onCounterIncremented(uint theCounter);
 
   function MyContract(uint _counter) {
     counter = _counter;
@@ -17,5 +17,10 @@ contract MyContract {
   function incrementCounter(uint i) {
     counter += i;
     onCounterIncremented(counter);
+  }
+
+  function doubleIncrementCounter(uint i) {
+    incrementCounter(i);
+    incrementCounter(i);
   }
 }
