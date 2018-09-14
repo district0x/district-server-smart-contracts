@@ -1,5 +1,11 @@
 language: clojure
 script: lein doo node "tests" once
+notifications:
+  slack:
+    on_success: always
+    on_failure: always
+    rooms:
+    - district0x:53vhalUfg0MitsQwzjP5PWdd#travis-ci
 before_install:
  - sudo add-apt-repository --yes ppa:ethereum/ethereum
  - sudo apt-get -qq update
@@ -7,8 +13,10 @@ before_script:
   - "echo 'Installing Solc'"
   - sudo apt-get --yes install solc
   - "echo 'Compiling contracts'"
-  - lein compile-solidity
+  - lein solc once
   - "echo 'Installing Ganache'"
   - npm install -g ganache-cli
-  - "echo 'Running Ganache'"
-  - ganache-cli -p 8753 > /dev/null &
+  - "echo 'Running Ganache instance with auto mining'"
+  - ganache-cli -p 8548 > /dev/null &
+  - "echo 'Running Ganache without auto mining'"
+  - ganache-cli -p 8549 -b 3 > /dev/null &
