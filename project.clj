@@ -1,4 +1,4 @@
-(defproject district0x/district-server-smart-contracts "1.0.9-SNAPSHOT"
+(defproject district0x/district-server-smart-contracts "1.0.8-SNAPSHOT"
   :description "district0x server module for handling smart-contracts"
   :url "https://github.com/district0x/district-server-smart-contracts"
   :license {:name "Eclipse Public License"
@@ -17,8 +17,6 @@
   :npm {:dependencies [[deasync "0.1.11"]]
         :devDependencies [[ws "2.0.1"]]}
   
-  ;; :figwheel {:server-port 4674}
-
   :solc {:src-path "resources/public/contracts/src"
          :build-path "resources/public/contracts/build"
          :solc-err-only true
@@ -28,16 +26,8 @@
 
   :clean-targets ^{:protect false} ["target" "tests-compiled"]
   
-  :profiles {:dev {:dependencies [[org.clojure/clojure "1.8.0"]
-                                  #_[com.cemerick/piggieback "0.2.2"]
-                                  #_[figwheel-sidecar "0.5.14"]
-                                  #_[org.clojure/tools.nrepl "0.2.13"]]
-                   ;;:source-paths ["dev"]
-                   }}
-
   :cljsbuild {:builds [{:id "tests"
                         :source-paths ["src" "test"]
-                        ;; :figwheel {:on-jsload "tests.runner/-main"}
                         :compiler {:main "tests.runner"
                                    :output-to "tests-compiled/run-tests.js"
                                    :output-dir "tests-compiled"

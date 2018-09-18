@@ -14,4 +14,4 @@ pom.xml.asc
 /figwheel_server.log
 /tests-compiled/
 /node_modules/
-/resources/public/contracts/build/*.bin
+resources/public/contracts/build/
