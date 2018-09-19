@@ -2,6 +2,7 @@ pragma solidity ^0.4.18;
 
 contract MyContract {
 
+  address public target = 0xBEeFbeefbEefbeEFbeEfbEEfBEeFbeEfBeEfBeef;
   uint public counter;
 
   event onCounterIncremented(uint theCounter);
@@ -23,4 +24,5 @@ contract MyContract {
     incrementCounter(i);
     incrementCounter(i);
   }
+
 }

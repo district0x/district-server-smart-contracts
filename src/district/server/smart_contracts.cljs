@@ -1,15 +1,16 @@
 (ns district.server.smart-contracts
-  (:require
-    [cljs-web3.core :as web3]
-    [cljs-web3.eth :as web3-eth]
-    [cljs-web3.utils :refer [js->cljkk camel-case]]
-    [cljs.core.async :refer [<! >! timeout]]
-    [cljs.nodejs :as nodejs]
-    [cljs.spec.alpha :as s]
-    [clojure.string :as string]
-    [district.server.config :refer [config]]
-    [district.server.web3 :refer [web3]]
-    [mount.core :as mount :refer [defstate]])
+  (:require [cljs-web3.core :as web3]
+            [cljs-web3.eth :as web3-eth]
+            [cljs-web3.utils :refer [js->cljkk camel-case]]
+            [cljs.core.async :refer [<! >! timeout]]
+            [cljs.core.match :refer-macros [match]]
+            [cljs.nodejs :as nodejs]
+            [cljs.pprint]
+            [cljs.spec.alpha :as s]
+            [clojure.string :as string]
+            [district.server.config :refer [config]]
+            [district.server.web3 :refer [web3]]
+            [mount.core :as mount :refer [defstate]])
   (:require-macros [cljs.core.async.macros :refer [go-loop]]))
 
 (declare start)
@@ -175,11 +176,15 @@
                          ")"))))
 
 
-(defn- handle-gas-usage-printing [method tx-hash]
-  (let [{:keys [:gas-used :block-number :status]} (web3-eth/get-transaction-receipt @web3 tx-hash)]
-    (when (and gas-used block-number)
-      (println method (.toLocaleString gas-used) (if (zero? status) "failed" ""))
-      gas-used)))
+(defn- handle-contract-call
+  ([method tx-hash]
+   (handle-contract-call method tx-hash false))
+  ([method tx-hash print-gas-usage?]
+   (let [{:keys [:gas-used :block-number :status]} (web3-eth/get-transaction-receipt @web3 tx-hash)]
+     (when (and gas-used block-number)
+       (when print-gas-usage?
+         (println method (.toLocaleString gas-used) (if (zero? status) "failed" "")))
+       gas-used))))
 
 
 (defn- instance-from-arg [contract]
@@ -189,12 +194,15 @@
     :else contract))
 
 
-(defn contract-call [contract-key method & args]
+(defn contract-call* [contract-key method & args]
   "contract-key parameter can be one of:
    - keyword :some-contract
    - tuple of keyword and address [:some-contract 0x1234...]
    - instance SomeContract"
-  (let [contract (instance-from-arg contract-key)
+  (let [deasync? (fn? (last args))
+        callback (when deasync? (last args))
+        args (if deasync? (drop-last args) args)
+        contract (instance-from-arg contract-key)
         last-arg (last args)
         args (if (and (map? last-arg)
                       (not (:from last-arg)))
@@ -202,20 +210,37 @@
                args)
         result (apply web3-eth/contract-call contract method args)
         filter-id (atom nil)]
-    (when (and (:print-gas-usage? @smart-contracts)
-               (map? (last args))
-               (string? result))
-      (if (:auto-mining? @smart-contracts)
-        (handle-gas-usage-printing method result)
-        (reset! filter-id
-                (web3-eth/filter
-                  @web3
-                  "latest"
-                  (fn []
-                    (when-let [gas-used (handle-gas-usage-printing method result)]
-                      (web3-eth/stop-watching! @filter-id)))))))
-    result))
+    (if-not (fn? callback)
+      (do
+        (when (and (:print-gas-usage? @smart-contracts)
+                   (map? (last args))
+                   (string? result))
+          (handle-contract-call method result))
+        result)
+      (reset! filter-id
+              (web3-eth/filter
+               @web3
+               "latest"
+               (fn [err]
+                 (when err
+                   (callback err))
+                 (try                   
+                   (when (and (string? result)
+                              (map? (last args)))
+                     (loop [gas-used (handle-contract-call method result)]
+                       (when-not gas-used
+                         (recur (handle-contract-call method result (:print-gas-usage? @smart-contracts))))))
+                   (web3-eth/stop-watching! @filter-id)
+                   (callback nil result)
+                   (catch js/Error err
+                     (callback err)))))))))
 
+(def contract-call-deasynced (deasync contract-call*))
+
+(defn contract-call [& args]
+  (if (:auto-mining? @smart-contracts)
+    (apply contract-call* args)
+    (apply contract-call-deasynced args)))
 
 (defn contract-event-in-tx [tx-hash contract event-name & args]
   (let [instance (instance-from-arg contract)
