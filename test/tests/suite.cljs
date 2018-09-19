@@ -1,10 +1,8 @@
 (ns tests.suite
   (:require [cljs.test :refer-macros [is testing]]
-            [district.server.smart-contracts :as contracts]
-            ;; [mount.core :as mount]
-#_            [tests.smart-contracts]))
+            [district.server.smart-contracts :as contracts]))
 
-(defn test-smart-contracts []  
+(defn test-smart-contracts []
   (testing "smart contracts test suite"
     (is (false? (empty? (contracts/contract-abi :my-contract))))
     (is (false? (empty? (contracts/contract-bin :my-contract))))
@@ -33,4 +31,3 @@
     (is (= "0xbeefbeefbeefbeefbeefbeefbeefbeefbeefbeef" (contracts/contract-call :my-contract :target)))
 
     (is (= 7 (.toNumber (contracts/contract-call :my-contract :counter))))))
-

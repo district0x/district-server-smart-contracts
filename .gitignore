@@ -15,3 +15,4 @@ pom.xml.asc
 /tests-compiled/
 /node_modules/
 resources/public/contracts/build/
+package-lock.json
