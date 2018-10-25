@@ -34,7 +34,7 @@ You can pass following args to smart-contracts module:
 * `:contracts-build-path` Path to your compiled smart contracts, where you have .bin and .abi files. (default: `"<cwd>/resources/public/contracts/build/"`)
 * `:contracts-var` Var of smart-contracts map in namespace where you want to store addresses of deployed smart-contracts
 * `:print-gas-usage?` If true, will print gas usage after each contract deployment or state function call. Useful for development. 
-* `:auto-mining?` Pass true if you're using [ganache](https://github.com/trufflesuite/ganache) in auto-mining mode. ** IMPORTANT:** This flag makes the API synchronous, effectively blocking [deploy-smart-contract](#deploy-smart-contract!) and [contract-call](#contract-call) on transaction being mined! Make sure you understand the implications. 
+* `:auto-mining?` Pass true if you're using [ganache](https://github.com/trufflesuite/ganache) in auto-mining mode. ** IMPORTANT:** Setting this flag to `false` makes the API synchronous, effectively blocking [deploy-smart-contract](#deploy-smart-contract!) and [contract-call](#contract-call) on transaction being mined! Make sure you understand the implications. 
 
 Since every time we deploy a smart-contract, it has different address, we need way to store it in a file, so both server and UI can access it, even after restart. For this purpose, we create a namespace containing only smart-contract names and addresses, that will be modified automatically by this module. For example: 
 ```clojure
