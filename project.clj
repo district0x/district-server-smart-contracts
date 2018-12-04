@@ -1,4 +1,4 @@
-(defproject district0x/district-server-smart-contracts "1.0.9"
+(defproject district0x/district-server-smart-contracts "1.0.10"
   :description "district0x server module for handling smart-contracts"
   :url "https://github.com/district0x/district-server-smart-contracts"
   :license {:name "Eclipse Public License"
@@ -14,7 +14,8 @@
             [lein-doo "0.1.8"]
             [lein-solc "1.0.1-1"]]
 
-  :npm {:dependencies [[deasync "0.1.11"]]
+  :npm {:dependencies [[deasync "0.1.11"]
+                       [ethereumjs-tx "1.3.7"]]
         :devDependencies [[ws "2.0.1"]]}
 
   :solc {:src-path "resources/public/contracts/src"

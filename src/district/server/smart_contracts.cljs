@@ -21,7 +21,7 @@
 (def fs (nodejs/require "fs"))
 (def process (nodejs/require "process"))
 (def deasync (nodejs/require "deasync"))
-
+(def EthereumTx (nodejs/require "ethereumjs-tx"))
 
 (defn contract [contract-key]
   (get @(:contracts @smart-contracts) contract-key))
@@ -115,6 +115,32 @@
         (println (:name contract) contract-address (.toLocaleString gas-used)))
       contract)))
 
+(defn send-deploy-tx [abi args {:keys [gas-price gas nonce data from from-private-key] :as opts} callback]
+  (let [nonce (or nonce (web3-eth/get-transaction-count @web3 from "pending"))
+        gas-price (or gas-price (.toNumber (web3-eth/gas-price @web3)))
+        gas-price-hex (web3/to-hex gas-price)
+        gas-limit-hex (web3/to-hex gas)
+        nonce-hex (web3/to-hex nonce)
+        contract (web3-eth/contract @web3 abi)
+
+        contract-data (apply web3-eth/contract-get-data (concat [contract :new]
+                                                                args
+                                                                [{:data data}]))
+
+        pk-buf (when from-private-key (js/Buffer. from-private-key "hex"))
+        tx (EthereumTx. #js {:nonce nonce-hex
+                             :gasPrice gas-price-hex
+                             :gasLimit gas-limit-hex
+                             :data contract-data
+                             :from from})
+        _ (when pk-buf (.sign tx pk-buf))
+        serialized-tx (.toString (.serialize tx) "hex")]
+    (web3-eth/send-raw-transaction! @web3
+                                    (str "0x" serialized-tx)
+                                    (fn [err tx-hash]
+                                      (if err
+                                        (js/console.error "Error sending raw tx" err tx-hash)
+                                        (callback tx-hash))))))
 
 (defn- deploy-smart-contract* [contract-key {:keys [:placeholder-replacements :arguments]
                                              :as opts} callback]
@@ -126,31 +152,30 @@
                       (when-not (:from opts)
                         {:from (first (web3-eth/accounts @web3))})
                       opts)
-          Contract (apply web3-eth/contract-new @web3 abi (into (vec arguments) [(select-keys opts [:from :to :gas-price :gas
-                                                                                                    :value :data :nonce
-                                                                                                    :condition])]))
-          tx-hash (aget Contract "transactionHash")
           filter-id (atom nil)]
 
-      (if-not (fn? callback)
-        (handle-deployed-contract! contract-key contract abi tx-hash)
-        (reset!
-          filter-id
-          (web3-eth/filter
-            @web3
-            "latest"
-            (fn [err]
-              (when err
-                (callback err))
-              (try
-                (when-let [contract (handle-deployed-contract! contract-key contract abi tx-hash)]
-                  (web3-eth/stop-watching! @filter-id)
-                  ;; reset is needed, otherwise web3 crashes with "Can't connect to" on next request
-                  ;; Reasons unknown. Needed only because of deasync hack
-                  (web3/reset @web3)
-                  (callback nil contract))
-                (catch js/Error err
-                  (callback err))))))))))
+      (send-deploy-tx abi arguments opts
+                      (fn [tx-hash]
+                        (println "Got TX-HASH" tx-hash)
+                        (if-not (fn? callback)
+                         (handle-deployed-contract! contract-key contract abi tx-hash)
+                         (reset!
+                          filter-id
+                          (web3-eth/filter
+                           @web3
+                           "latest"
+                           (fn [err]
+                             (when err
+                               (callback err))
+                             (try
+                               (when-let [contract (handle-deployed-contract! contract-key contract abi tx-hash)]
+                                 (web3-eth/stop-watching! @filter-id)
+                                 ;; reset is needed, otherwise web3 crashes with "Can't connect to" on next request
+                                 ;; Reasons unknown. Needed only because of deasync hack
+                                 (web3/reset @web3)
+                                 (callback nil contract))
+                               (catch js/Error err
+                                 (callback err))))))))))))
 
 
 (def deploy-smart-contract-deasynced (deasync deploy-smart-contract*))
@@ -224,7 +249,7 @@
                (fn [err]
                  (when err
                    (callback err))
-                 (try                   
+                 (try
                    (when (and (string? result)
                               (map? (last args)))
                      (loop [gas-used (handle-contract-call method result)]

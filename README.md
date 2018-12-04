@@ -5,7 +5,7 @@
 Clojurescript-node.js [mount](https://github.com/tolitius/mount) module for a district server, that takes care of smart-contracts loading, deployment, function calling and event handling.
 
 ## Installation
-Add `[district0x/district-server-smart-contracts "1.0.9"]` into your project.clj  
+Add `[district0x/district-server-smart-contracts "1.0.10"]` into your project.clj
 Include `[district.server.smart-contracts]` in your CLJS file, where you use `mount/start`
 
 ## API Overview
@@ -26,17 +26,17 @@ Include `[district.server.smart-contracts]` in your CLJS file, where you use `mo
   - [replay-past-events](#replay-past-events)
 
 ## Real-world example
-To see how district server modules play together in real-world app, you can take a look at [NameBazaar server folder](https://github.com/district0x/name-bazaar/tree/master/src/name_bazaar/server), 
+To see how district server modules play together in real-world app, you can take a look at [NameBazaar server folder](https://github.com/district0x/name-bazaar/tree/master/src/name_bazaar/server),
 where this is deployed in production.
 
 ## Usage
-You can pass following args to smart-contracts module: 
+You can pass following args to smart-contracts module:
 * `:contracts-build-path` Path to your compiled smart contracts, where you have .bin and .abi files. (default: `"<cwd>/resources/public/contracts/build/"`)
 * `:contracts-var` Var of smart-contracts map in namespace where you want to store addresses of deployed smart-contracts
-* `:print-gas-usage?` If true, will print gas usage after each contract deployment or state function call. Useful for development. 
-* `:auto-mining?` Pass true if you're using [ganache](https://github.com/trufflesuite/ganache) in auto-mining mode. ** IMPORTANT:** This flag makes the API synchronous, effectively blocking [deploy-smart-contract](#deploy-smart-contract!) and [contract-call](#contract-call) on transaction being mined! Make sure you understand the implications. 
+* `:print-gas-usage?` If true, will print gas usage after each contract deployment or state function call. Useful for development.
+* `:auto-mining?` Pass true if you're using [ganache](https://github.com/trufflesuite/ganache) in auto-mining mode. ** IMPORTANT:** This flag makes the API synchronous, effectively blocking [deploy-smart-contract](#deploy-smart-contract!) and [contract-call](#contract-call) on transaction being mined! Make sure you understand the implications.
 
-Since every time we deploy a smart-contract, it has different address, we need way to store it in a file, so both server and UI can access it, even after restart. For this purpose, we create a namespace containing only smart-contract names and addresses, that will be modified automatically by this module. For example: 
+Since every time we deploy a smart-contract, it has different address, we need way to store it in a file, so both server and UI can access it, even after restart. For this purpose, we create a namespace containing only smart-contract names and addresses, that will be modified automatically by this module. For example:
 ```clojure
 (ns my-district.smart-contracts)
 
@@ -113,13 +113,13 @@ Returns contract's instance. If provided address, it will create instance relate
 
 #### <a name="contract-call">`contract-call [contract-key method & args]`
 Same as you call [cljs-web3](https://github.com/district0x/cljs-web3) contract-call function, except for contract-key
-you can pass following: 
+you can pass following:
 * keyword (e.g `:my-contract`)
 * tuple: keyword + address, for contract at specific address   (e.g `[:my-contract "0x575262e80edf7d4b39d95422f86195eb4c21bb52"]`)
 * tuple: keyword + keyword, to use ABI from first contract and address from second contract   (e.g `[:my-contract :my-other-contract]`)
- 
+
 #### <a name="deploy-smart-contract!">`deploy-smart-contract! [contract-key opts]`
-Deploys contract to the blockchain. Returns contract object and also stores new address in internal state.   
+Deploys contract to the blockchain. Returns contract object and also stores new address in internal state.
 `opts:`
 * `:arguments` Arguments passed to a contract constructor
 * `:gas` Gas limit, default 4M
@@ -134,10 +134,10 @@ Deploys contract to the blockchain. Returns contract object and also stores new 
 ```
 
 #### <a name="write-smart-contracts!">`write-smart-contracts! []`
-Writes smart-contracts that are currently in module's state into file that was passed to `:contracts-var`.    
+Writes smart-contracts that are currently in module's state into file that was passed to `:contracts-var`.
 
 #### <a name="contract-event-in-tx">`contract-event-in-tx [tx-hash contract-key event-name & args]`
-Will return first contract event with name `event-name` that occured during execution of transaction with hash `tx-hash`. This is useful, when you look for data in specific event after doing some transaction. For example in tests, or mock data generating. Advantage is that this function is synchronous, compared to setting up event filter with web3. 
+Will return first contract event with name `event-name` that occured during execution of transaction with hash `tx-hash`. This is useful, when you look for data in specific event after doing some transaction. For example in tests, or mock data generating. Advantage is that this function is synchronous, compared to setting up event filter with web3.
 ```clojure
 (let [opts {:gas 200000 :from some-address}
       tx-hash (contracts/contract-call :my-contract :fn-that-fires-event)]
@@ -150,8 +150,8 @@ The same as `contract-event-in-tx` but instead of first event, returns collectio
 
 
 #### <a name="replay-past-events">`replay-past-events [event-filter callback opts]`
-Reruns all past events and calls callback for each one. This is similiar to what you do with normal web3 event filter, but with this one you can slow down rate at which callbacks are fired. 
-Helps in case you have large number of events with slow callbacks, to prevent unresponsive app. 
+Reruns all past events and calls callback for each one. This is similiar to what you do with normal web3 event filter, but with this one you can slow down rate at which callbacks are fired.
+Helps in case you have large number of events with slow callbacks, to prevent unresponsive app.
 ```clojure
 (-> (contracts/contract-call :my-contract :on-some-event {:from-block 0})
   (replay-past-events on-some-event {:delay 10})) ;; in ms
@@ -169,5 +169,3 @@ node tests-compiled/run-tests.js
 # To run tests without REPL
 lein doo node "tests" once
 ```
-
-
