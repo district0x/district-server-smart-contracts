@@ -5,7 +5,7 @@
 Clojurescript-node.js [mount](https://github.com/tolitius/mount) module for a district server, that takes care of smart-contracts loading, deployment, function calling and event handling.
 
 ## Installation
-Add `[district0x/district-server-smart-contracts "1.0.9"]` into your project.clj  
+Latest released version of this library: [![Clojars Project](https://img.shields.io/clojars/v/district0x/district-server-smart-contracts.svg)](https://clojars.org/district0x/district-server-smart-contracts)
 Include `[district.server.smart-contracts]` in your CLJS file, where you use `mount/start`
 
 ## API Overview
