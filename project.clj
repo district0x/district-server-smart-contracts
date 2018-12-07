@@ -34,6 +34,21 @@
   :profiles {:dev {:dependencies [[org.clojure/clojure "1.9.0"]]
                    :resource-paths ["resources"]}}
 
+  :deploy-repositories [["snapshots" {:url "https://clojars.org/repo"
+                                      :username :env/clojars_username
+                                      :password :env/clojars_password
+                                      :sign-releases false}]
+                        ["releases"  {:url "https://clojars.org/repo"
+                                      :username :env/clojars_username
+                                      :password :env/clojars_password
+                                      :sign-releases false}]]
+
+  :release-tasks [["vcs" "assert-committed"]
+                  ["change" "version" "leiningen.release/bump-version" "release"]
+                  ["vcs" "commit" "Version ${:version} %s [ci skip]"]
+                  ["vcs" "tag" "v" "--no-sign"] ; disable signing and add "v" prefix
+                  ["deploy"]]
+
   :cljsbuild {:builds [{:id "tests"
                         :source-paths ["src" "test"]
                         :compiler {:main "tests.runner"
