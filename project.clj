@@ -1,4 +1,4 @@
-(defproject district0x/district-server-smart-contracts "1.0.9"
+(defproject district0x/district-server-smart-contracts "1.0.10-SNAPSHOT"
   :description "district0x server module for handling smart-contracts"
   :url "https://github.com/district0x/district-server-smart-contracts"
   :license {:name "Eclipse Public License"
@@ -43,10 +43,7 @@
                                       :password :env/clojars_password
                                       :sign-releases false}]]
 
-  :release-tasks [["vcs" "assert-committed"]
-                  ["change" "version" "leiningen.release/bump-version" "release"]
-                  ["vcs" "commit" "Version ${:version} %s [ci skip]"]
-                  ["vcs" "tag" "v" "--no-sign"] ; disable signing and add "v" prefix
+  :release-tasks [["change" "version" "leiningen.release/bump-version" "release"]
                   ["deploy"]]
 
   :cljsbuild {:builds [{:id "tests"
