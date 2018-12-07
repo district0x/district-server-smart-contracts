@@ -11,7 +11,9 @@ before_install:
  - sudo apt-get -qq update
 before_script:
   - "echo 'Installing Solc'"
-  - sudo apt-get --yes install solc
+  - sudo wget --no-check-certificate -P /bin https://github.com/ethereum/solidity/releases/download/v0.4.24/solc-static-linux
+  - sudo chmod a+x /bin/solc-static-linux
+  - sudo ln -s /bin/solc-static-linux /usr/bin/solc
   - "echo 'Compiling contracts'"
   - lein solc once
   - "echo 'Installing Ganache'"
