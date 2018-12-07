@@ -12,7 +12,7 @@
 
   :plugins [[lein-npm "0.6.2"]
             [lein-doo "0.1.8"]
-            [lein-solc "1.0.1-1"]]
+            [lein-solc "1.0.11"]]
 
   :npm {:dependencies [[deasync "0.1.11"]]
         :devDependencies [[ws "2.0.1"]]}
@@ -22,7 +22,10 @@
          :solc-err-only true
          :verbose false
          :wc true
-         :contracts :all}
+         :contracts :all
+         :abi? false
+         :bin? false
+         :truffle-artifacts? true}
 
   :source-paths ["src"]
 
@@ -30,6 +33,21 @@
 
   :profiles {:dev {:dependencies [[org.clojure/clojure "1.9.0"]]
                    :resource-paths ["resources"]}}
+
+  :deploy-repositories [["snapshots" {:url "https://clojars.org/repo"
+                                      :username :env/clojars_username
+                                      :password :env/clojars_password
+                                      :sign-releases false}]
+                        ["releases"  {:url "https://clojars.org/repo"
+                                      :username :env/clojars_username
+                                      :password :env/clojars_password
+                                      :sign-releases false}]]
+
+  :release-tasks [["vcs" "assert-committed"]
+                  ["change" "version" "leiningen.release/bump-version" "release"]
+                  ["vcs" "commit" "Version ${:version} %s [ci skip]"]
+                  ["vcs" "tag" "v" "--no-sign"] ; disable signing and add "v" prefix
+                  ["deploy"]]
 
   :cljsbuild {:builds [{:id "tests"
                         :source-paths ["src" "test"]
