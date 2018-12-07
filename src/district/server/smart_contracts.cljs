@@ -57,28 +57,28 @@
   (swap! (:contracts @smart-contracts) update contract-key merge contract))
 
 
-(defn- fetch-contract [file-name & [{:keys [:path :optional?]}]]
+(defn- fetch-contract
+  "Given a file-name and a path tries to load abi and bytecode.
+  It first try to load it from a json truffle artifact, if it doesn't find it
+  tries .abi .bin files for the name.
+  Returns a map with :abi and :bin keys."
+  [file-name & [{:keys [:path]}]]
   (let [path (or path (str (.cwd process) "/resources/public/contracts/build/"))
-        file-path (str path file-name)
-        exists? (if optional?
-                  (.existsSync fs file-path)
-                  true)]
-    (when exists?
-      (.readFileSync fs file-path "utf-8"))))
+        json-file-path (str path file-name ".json")
+        abi-file-path (str path file-name ".abi")
+        bin-file-path (str path file-name ".bin")]
+    (if (.existsSync fs json-file-path)
 
+      (let [content-str (.readFileSync fs json-file-path "utf-8")
+            json-file-content (js/JSON.parse content-str)]
 
-(defn- fetch-abi [contract-name & [opts]]
-  (js/JSON.parse (fetch-contract (str contract-name ".abi"))))
-
-
-(defn- fetch-bin [contract-name & [opts]]
-  (fetch-contract (str contract-name ".bin") opts))
-
+        {:abi (aget json-file-content "abi")
+         :bin (aget json-file-content "bytecode")})
+      {:abi (when (.existsSync fs abi-file-path) (js/JSON.parse (.readFileSync fs abi-file-path "utf-8")))
+       :bin (when (.existsSync fs bin-file-path) (.readFileSync fs bin-file-path "utf-8"))})))
 
 (defn load-contract-files [contract {:keys [:contracts-build-path]}]
-  (let [abi (fetch-abi (:name contract) {:path contracts-build-path})
-        bin (fetch-bin (:name contract) {:path contracts-build-path
-                                         :optional? true})]
+  (let [{:keys [abi bin]} (fetch-contract (:name contract) {:path contracts-build-path})]
     (merge contract
            {:abi abi
             :bin bin
@@ -224,7 +224,7 @@
                (fn [err]
                  (when err
                    (callback err))
-                 (try                   
+                 (try
                    (when (and (string? result)
                               (map? (last args)))
                      (loop [gas-used (handle-contract-call method result)]
