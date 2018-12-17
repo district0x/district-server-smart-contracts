@@ -27,8 +27,7 @@ after_success:
 - git config --global user.email "travis@travis-ci.org"
 - git config --global user.name "Travis CI"
 - git remote rm origin
-- git remote add origin https://${GH_TOKEN}@github.com/district0x/district-ui-logging.git
-  > /dev/null 2>&1
+- git remote add origin https://${GH_TOKEN}@github.com/district0x/district-ui-logging.git > /dev/null 2>&1
 env:
   global:
   - secure: tFVOVNGXcPs680MkzH3dw8AtDnwSdOZz1EQLaNietr8jqaiBsjN8dJ5CuC1Q46SfLZHrP8RlscBYgxELebg94GrkOCbl8CYE6fTPlgrA63rkVOTzAr6RTBf4HewUDmQlEGxOLYrnfEbaeeS/2JBwuSjfD5MI3lBXD1wcHdkLNyL97WhYpZ1wh7/d9kG2Q04IXl4Axzu0rAE4K020kkSZPza35+5Xtglu+EkL4yjeun9vNtpvGOe66s2+fQtqZpnBDjYsQsuLdctblICbckhhrT4oxnMO6Eqk9IEvIRxZSeOxed7O8H78CCDHYXjZDB+ZZMppoQf0mvio3nYlNW0ZGlFmLfql6erAYVTqTtef80PG1BhZQYFHzvYYC0UOKLBsIioxAwu0EfdlD2ei+ZwevWsDsyIpYyfOmwK0B5HnxCGSUgFhuqMroWDY3PY+sZMB7AuVcCSxSG49wsrfFRUwUmZMMB1zLVmZbQOlY/JaROoZlnuvWxVa7EwbxXyErLUIWB6i8ECw8KZBedaJdMf2MUdV3ipm3/X5WEqGz/qcievJWQGwVrbOdJU1lDoOH4JFEp7tag3yzUf0BlmqX5uzDZnIr1VyKAY0Hl/S7UBdNCx6GrY1bFlj91ZuwciQHIxjqpy2yzi5Dh6xjmFZWAL5ucqHl2pytQOsMPuqR8gBcPc=

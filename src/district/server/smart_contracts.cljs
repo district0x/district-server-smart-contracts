@@ -11,33 +11,27 @@
             [district.server.config :refer [config]]
             [district.server.web3 :refer [web3]]
             [mount.core :as mount :refer [defstate]])
-  (:require-macros [cljs.core.async.macros :refer [go-loop]]))
+  (:require-macros [cljs.core.async.macros :refer [go-loop go]]))
+
+(def fs (nodejs/require "fs"))
+(def process (nodejs/require "process"))
 
 (declare start)
 
 (defstate smart-contracts :start (start (merge (:smart-contracts @config)
                                                (:smart-contracts (mount/args)))))
 
-(def fs (nodejs/require "fs"))
-(def process (nodejs/require "process"))
-(def deasync (nodejs/require "deasync"))
-
-
 (defn contract [contract-key]
   (get @(:contracts @smart-contracts) contract-key))
-
 
 (defn contract-address [contract-key]
   (:address (contract contract-key)))
 
-
 (defn contract-name [contract-key]
   (:name (contract contract-key)))
 
-
 (defn contract-abi [contract-key]
   (:abi (contract contract-key)))
-
 
 (defn contract-bin [contract-key]
   (:bin (contract contract-key)))
@@ -51,7 +45,6 @@
    (web3-eth/contract-at @web3 (contract-abi contract-key) (if (keyword? contract-key-or-addr)
                                                              (contract-address contract-key-or-addr)
                                                              contract-key-or-addr))))
-
 
 (defn update-contract! [contract-key contract]
   (swap! (:contracts @smart-contracts) update contract-key merge contract))
@@ -105,7 +98,7 @@
               (link-library bin placeholder address)))
           bin library-placeholders))
 
-(defn- handle-deployed-contract! [contract-key contract abi tx-hash]
+(defn- handle-deployed-contract! [contract-key {:keys [:abi :bin] :as contract} tx-hash]
   (let [{:keys [:gas-used :block-number :contract-address]} (web3-eth/get-transaction-receipt @web3 tx-hash)
         contract (merge contract {:instance (web3-eth/contract-at @web3 abi contract-address)
                                   :address contract-address})]
@@ -115,8 +108,28 @@
         (println (:name contract) contract-address (.toLocaleString gas-used)))
       contract)))
 
+(defn deploy-smart-contract!
+  ([contract-key args {:keys [:placeholder-replacements :from :gas] :as opts} #_callback]
+   (let [{:keys [:abi :bin] :as contract} (load-contract-files (contract contract-key) @smart-contracts)
+         opts (merge {:data (str "0x" (link-contract-libraries @(:contracts @smart-contracts) bin placeholder-replacements))}
+                     (when-not from
+                       {:from (first (web3-eth/accounts @web3))})
+                     (when-not gas
+                       {:gas 4000000})
+                     opts)]
+     (-> (js/Promise.resolve
+           (-> (apply web3-eth/contract-new @web3 abi
+                     (merge args (select-keys opts [:from :to :gas-price :gas
+                                                    :value :data :nonce
+                                                    :condition])))
+              (aget "transactionHash")))
+         (.then (fn [tx-hash]
+                  (handle-deployed-contract! contract-key contract tx-hash))))))
+  ([contract-key args]
+   (deploy-smart-contract! contract-key args {:from (first (web3-eth/accounts @web3))
+                                              :gas 4000000})))
 
-(defn- deploy-smart-contract* [contract-key {:keys [:placeholder-replacements :arguments]
+#_(defn- deploy-smart-contract* [contract-key {:keys [:placeholder-replacements :arguments]
                                              :as opts} callback]
   (let [{:keys [:abi :bin] :as contract} (load-contract-files (contract contract-key) @smart-contracts)]
     (when-not bin
@@ -152,15 +165,6 @@
                 (catch js/Error err
                   (callback err))))))))))
 
-
-(def deploy-smart-contract-deasynced (deasync deploy-smart-contract*))
-
-(defn deploy-smart-contract! [& args]
-  (if (:auto-mining? @smart-contracts)
-    (apply deploy-smart-contract* args)
-    (apply deploy-smart-contract-deasynced args)))
-
-
 (defn write-smart-contracts! []
   (let [{:keys [:ns :file :name]} (meta (:contracts-var @smart-contracts))]
     (.writeFileSync fs file
@@ -176,71 +180,66 @@
                          ")"))))
 
 
-(defn- handle-contract-call
-  ([method tx-hash]
-   (handle-contract-call method tx-hash false))
-  ([method tx-hash print-gas-usage?]
-   (let [{:keys [:gas-used :block-number :status]} (web3-eth/get-transaction-receipt @web3 tx-hash)]
-     (when (and gas-used block-number)
-       (when print-gas-usage?
-         (println method (.toLocaleString gas-used) (if (zero? status) "failed" "")))
-       gas-used))))
-
-
 (defn- instance-from-arg [contract]
   (cond
     (keyword? contract) (instance contract)
     (sequential? contract) (instance (first contract) (second contract))
     :else contract))
 
+;; TODO : add alts for definite timeout (or # of retries)
+(defn- wait-for-tx-receipt*
+  "callback is a nodejs style callback i.e. (fn [error data] ...)"
+  [tx-hash callback]
+  (web3-eth/get-transaction-receipt @web3 tx-hash (fn [error receipt]
+                                                    (if error
+                                                      (callback error nil)
+                                                      (go
+                                                        (if receipt
+                                                          (callback nil receipt)
+                                                          (do
+                                                            ;; try again in 1K millis
+                                                            (<! (timeout 1000))
+                                                            (wait-for-tx-receipt* tx-hash callback))))))))
 
-(defn contract-call* [contract-key method & args]
-  "contract-key parameter can be one of:
-   - keyword :some-contract
-   - tuple of keyword and address [:some-contract 0x1234...]
-   - instance SomeContract"
-  (let [deasync? (fn? (last args))
-        callback (when deasync? (last args))
-        args (if deasync? (drop-last args) args)
-        contract (instance-from-arg contract-key)
-        last-arg (last args)
-        args (if (and (map? last-arg)
-                      (not (:from last-arg)))
-               (concat (butlast args) [(merge last-arg {:from (first (web3-eth/accounts @web3))})])
-               args)
-        result (apply web3-eth/contract-call contract method args)
-        filter-id (atom nil)]
-    (if-not (fn? callback)
-      (do
-        (when (and (:print-gas-usage? @smart-contracts)
-                   (map? (last args))
-                   (string? result))
-          (handle-contract-call method result))
-        result)
-      (reset! filter-id
-              (web3-eth/filter
-               @web3
-               "latest"
-               (fn [err]
-                 (when err
-                   (callback err))
-                 (try
-                   (when (and (string? result)
-                              (map? (last args)))
-                     (loop [gas-used (handle-contract-call method result)]
-                       (when-not gas-used
-                         (recur (handle-contract-call method result (:print-gas-usage? @smart-contracts))))))
-                   (web3-eth/stop-watching! @filter-id)
-                   (callback nil result)
-                   (catch js/Error err
-                     (callback err)))))))))
+(defn wait-for-tx-receipt
+  "blocks until transaction `tx-hash` gets sent to the network."
+  [tx-hash]
+  (js/Promise. (fn [resolve reject]
+                 (wait-for-tx-receipt* tx-hash (fn [err data]
+                                                 (if err
+                                                   (reject err)
+                                                   (resolve data)))))))
 
-(def contract-call-deasynced (deasync contract-call*))
+(defn contract-call
+  "# arguments:
+   ## `contract` parameter can be one of:
+   * keyword :some-contract
+   * tuple of keyword and address [:some-contract 0x1234...]
+   * instance SomeContract
+   ## `method` is a :camel_case keyword corresponding to the smart-contract function
+   ## `args` is a vector of arguments for the `method`
+   ## `opts` is a map of options passed as message data
+   # returns:
+   function returns a Promise"
+  ([contract method args {:keys [:from :gas] :as opts}]
+   (let [contract-instance (instance-from-arg contract)
+         opts (merge (when-not from
+                       {:from (first (web3-eth/accounts @web3))})
+                     opts)]
+     (js/Promise. (fn [resolve reject]
+                    (apply web3-eth/contract-call contract-instance method
+                           (merge args
+                                  opts
+                                  (fn [err data]
+                                    (if err
+                                      (reject err)
+                                      (resolve data)))))))))
+  
+  ([contract method args]
+   (contract-call contract method args {:from (first (web3-eth/accounts @web3))}))
 
-(defn contract-call [& args]
-  (if (:auto-mining? @smart-contracts)
-    (apply contract-call* args)
-    (apply contract-call-deasynced args)))
+  ([contract method]
+   (contract-call contract method [] {:from (first (web3-eth/accounts @web3))})))
 
 (defn contract-event-in-tx [tx-hash contract event-name & args]
   (let [instance (instance-from-arg contract)

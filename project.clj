@@ -14,24 +14,26 @@
             [lein-doo "0.1.8"]
             [lein-solc "1.0.11"]]
 
-  :npm {:dependencies [[deasync "0.1.11"]]
-        :devDependencies [[ws "2.0.1"]]}
+  :npm {:devDependencies [[ws "2.0.1"]]}
 
   :solc {:src-path "resources/public/contracts/src"
          :build-path "resources/public/contracts/build"
-         :solc-err-only true
-         :verbose false
-         :wc true
-         :contracts :all
          :abi? false
          :bin? false
-         :truffle-artifacts? true}
+         :truffle-artifacts? true
+         :contracts :all}
 
   :source-paths ["src"]
 
   :clean-targets ^{:protect false} ["target" "tests-compiled"]
 
-  :profiles {:dev {:dependencies [[org.clojure/clojure "1.9.0"]]
+  :profiles {:dev {:dependencies [
+                                  [com.cemerick/piggieback "0.2.2"]
+                                  [figwheel-sidecar "0.5.16"]
+                                  [lein-doo "0.1.8"]
+                                  [org.clojure/clojure "1.9.0"]
+                                  ]
+                   :source-paths ["dev" "src"]
                    :resource-paths ["resources"]}}
 
   :deploy-repositories [["snapshots" {:url "https://clojars.org/repo"
