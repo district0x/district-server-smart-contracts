@@ -19,10 +19,8 @@ before_script:
 - lein solc once
 - echo 'Installing Ganache'
 - npm install -g ganache-cli
-- echo 'Running Ganache instance with auto mining'
-- ganache-cli -p 8548 > /dev/null &
-- echo 'Running Ganache without auto mining'
-- ganache-cli -p 8549 -b 3 > /dev/null &
+- echo 'Running Ganache with block time of 3 seconds'
+- ganache-cli -p 8549 -l 8000000 -d -m district0x -b 3 > /dev/null &
 after_success:
 - git config --global user.email "travis@travis-ci.org"
 - git config --global user.name "Travis CI"

@@ -24,15 +24,21 @@
 
                (.then #(-> (contracts/contract-call :my-contract :increment-counter [2] {:gas 500000})
                            (.then (fn [tx-hash]
-                                    (is (= 3 (-> (contracts/contract-event-in-tx tx-hash :my-contract :on-counter-incremented)
+                                    (contracts/wait-for-tx-receipt tx-hash)))
+                           (.then (fn [{:keys [:transaction-hash]}]
+                                    (is (= 3 (-> (contracts/contract-event-in-tx transaction-hash :my-contract :on-counter-incremented)
                                               :args
                                               :the-counter
                                               .toNumber)))))))
 
                (.then #(-> (contracts/contract-call :my-contract :double-increment-counter [2] {:gas 500000})
+
                            (.then (fn [tx-hash]
+                                    (contracts/wait-for-tx-receipt tx-hash)))
+
+                           (.then (fn [{:keys [:transaction-hash]}]
                                     (is (= [5 7] (map (comp (fn [x] (.toNumber x)) :the-counter :args)
-                                                      (contracts/contract-events-in-tx tx-hash :my-contract :on-counter-incremented))))))))
+                                                      (contracts/contract-events-in-tx transaction-hash :my-contract :on-counter-incremented))))))))
 
                (.then #(-> (contracts/contract-call :my-contract :target)
                            (.then (fn [target]
