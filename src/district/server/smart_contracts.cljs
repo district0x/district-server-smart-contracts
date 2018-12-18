@@ -17,6 +17,7 @@
 (def process (nodejs/require "process"))
 
 (declare start)
+(declare wait-for-tx-receipt)
 
 (defstate smart-contracts :start (start (merge (:smart-contracts @config)
                                                (:smart-contracts (mount/args)))))
@@ -118,13 +119,14 @@
                        {:gas 4000000})
                      opts)]
      (-> (js/Promise.resolve
-           (-> (apply web3-eth/contract-new @web3 abi
+          (-> (apply web3-eth/contract-new @web3 abi
                      (merge args (select-keys opts [:from :to :gas-price :gas
                                                     :value :data :nonce
                                                     :condition])))
               (aget "transactionHash")))
-         (.then (fn [tx-hash]
-                  (handle-deployed-contract! contract-key contract tx-hash))))))
+         (.then #(wait-for-tx-receipt %))
+         (.then (fn [receipt]
+                  (handle-deployed-contract! contract-key contract (:transaction-hash receipt)))))))
   ([contract-key args]
    (deploy-smart-contract! contract-key args {:from (first (web3-eth/accounts @web3))
                                               :gas 4000000})))
@@ -234,7 +236,7 @@
                                     (if err
                                       (reject err)
                                       (resolve data)))))))))
-  
+
   ([contract method args]
    (contract-call contract method args {:from (first (web3-eth/accounts @web3))}))
 
