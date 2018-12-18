@@ -110,7 +110,16 @@
       contract)))
 
 (defn deploy-smart-contract!
-  ([contract-key args {:keys [:placeholder-replacements :from :gas] :as opts} #_callback]
+  "# arguments:
+     * `contract-key` keyword e.g. :some-contract
+   ## `args` is a vector of arguments for the constructor
+   ## `opts` is a map of options:
+    * `placeholder-replacements` : a map containing replacements for library placeholders
+    * `from` : address deploying the conract
+    * `:gas` : gas limit for the contract creation transaction
+   # returns:
+   function returns a Promise"
+  ([contract-key args {:keys [:placeholder-replacements :from :gas] :as opts}]
    (let [{:keys [:abi :bin] :as contract} (load-contract-files (contract contract-key) @smart-contracts)
          opts (merge {:data (str "0x" (link-contract-libraries @(:contracts @smart-contracts) bin placeholder-replacements))}
                      (when-not from
@@ -127,45 +136,10 @@
          (.then #(wait-for-tx-receipt %))
          (.then (fn [receipt]
                   (handle-deployed-contract! contract-key contract (:transaction-hash receipt)))))))
+
   ([contract-key args]
    (deploy-smart-contract! contract-key args {:from (first (web3-eth/accounts @web3))
                                               :gas 4000000})))
-
-#_(defn- deploy-smart-contract* [contract-key {:keys [:placeholder-replacements :arguments]
-                                             :as opts} callback]
-  (let [{:keys [:abi :bin] :as contract} (load-contract-files (contract contract-key) @smart-contracts)]
-    (when-not bin
-      (throw (js/Error. (str "Contract " contract-key " is missing bin"))))
-    (let [opts (merge {:data (str "0x" (link-contract-libraries @(:contracts @smart-contracts) bin placeholder-replacements))
-                       :gas 4000000}
-                      (when-not (:from opts)
-                        {:from (first (web3-eth/accounts @web3))})
-                      opts)
-          Contract (apply web3-eth/contract-new @web3 abi (into (vec arguments) [(select-keys opts [:from :to :gas-price :gas
-                                                                                                    :value :data :nonce
-                                                                                                    :condition])]))
-          tx-hash (aget Contract "transactionHash")
-          filter-id (atom nil)]
-
-      (if-not (fn? callback)
-        (handle-deployed-contract! contract-key contract abi tx-hash)
-        (reset!
-          filter-id
-          (web3-eth/filter
-            @web3
-            "latest"
-            (fn [err]
-              (when err
-                (callback err))
-              (try
-                (when-let [contract (handle-deployed-contract! contract-key contract abi tx-hash)]
-                  (web3-eth/stop-watching! @filter-id)
-                  ;; reset is needed, otherwise web3 crashes with "Can't connect to" on next request
-                  ;; Reasons unknown. Needed only because of deasync hack
-                  (web3/reset @web3)
-                  (callback nil contract))
-                (catch js/Error err
-                  (callback err))))))))))
 
 (defn write-smart-contracts! []
   (let [{:keys [:ns :file :name]} (meta (:contracts-var @smart-contracts))]
@@ -207,10 +181,10 @@
   "blocks until transaction `tx-hash` gets sent to the network."
   [tx-hash]
   (js/Promise. (fn [resolve reject]
-                 (wait-for-tx-receipt* tx-hash (fn [err data]
-                                                 (if err
-                                                   (reject err)
-                                                   (resolve data)))))))
+                 (wait-for-tx-receipt* tx-hash (fn [error tx-receipt]
+                                                 (if error
+                                                   (reject error)
+                                                   (resolve tx-receipt)))))))
 
 (defn contract-call
   "# arguments:
@@ -227,6 +201,8 @@
    (let [contract-instance (instance-from-arg contract)
          opts (merge (when-not from
                        {:from (first (web3-eth/accounts @web3))})
+                     (when-not gas
+                       {:gas 4000000})
                      opts)]
      (js/Promise. (fn [resolve reject]
                     (apply web3-eth/contract-call contract-instance method
