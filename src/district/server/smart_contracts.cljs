@@ -37,8 +37,6 @@
 (defn contract-bin [contract-key]
   (:bin (contract contract-key)))
 
-(declare contract-call)
-
 (defn instance
   ([contract-key]
    (:instance (contract contract-key)))
@@ -81,10 +79,10 @@
 
 (defn start [{:keys [contracts-build-path :contracts-var print-gas-usage?] :as opts}]
   (merge
-    {:contracts (atom (into {} (map (fn [[k v]]
-                                      [k (load-contract-files v opts)])
-                                    @contracts-var)))}
-    opts))
+   {:contracts (atom (into {} (map (fn [[k v]]
+                                     [k (load-contract-files v opts)])
+                                   @contracts-var)))}
+   opts))
 
 
 (defn link-library [bin placeholder library-address]
@@ -147,12 +145,12 @@
                     (str "(ns " ns ") \n\n"
                          "(def " name " \n"
                          (as-> @(:contracts @smart-contracts) $
-                               (map (fn [[k v]]
-                                      [k (dissoc v :instance :abi :bin)]) $)
-                               (into {} $)
-                               ;; cljs.pprint/write won't compile with simple optimisations
-                               ;; therefore must be required only in dev environment
-                               (cljs.pprint/write $ :stream nil))
+                           (map (fn [[k v]]
+                                  [k (dissoc v :instance :abi :bin)]) $)
+                           (into {} $)
+                           ;; cljs.pprint/write won't compile with simple optimisations
+                           ;; therefore must be required only in dev environment
+                           (cljs.pprint/write $ :stream nil))
                          ")"))))
 
 
@@ -198,14 +196,13 @@
    # returns:
    function returns a Promise"
   ([contract method args {:keys [:from :gas] :as opts}]
-   (let [contract-instance (instance-from-arg contract)
-         opts (merge (when-not from
+   (let [opts (merge (when-not from
                        {:from (first (web3-eth/accounts @web3))})
                      (when-not gas
                        {:gas 4000000})
                      opts)]
      (js/Promise. (fn [resolve reject]
-                    (apply web3-eth/contract-call contract-instance method
+                    (apply web3-eth/contract-call (instance-from-arg contract) method
                            (merge args
                                   opts
                                   (fn [err data]
@@ -218,6 +215,26 @@
 
   ([contract method]
    (contract-call contract method [] {:from (first (web3-eth/accounts @web3))})))
+
+(defn create-event-filter
+  "This function installs event filter
+   # arguments:
+   ## `contract` parameter can be one of:
+    * keyword :some-contract
+    * tuple of keyword and address [:some-contract 0x1234...]
+    * instance SomeContract
+   ## `event` : camel_case keyword corresponding to the smart-contract event
+   ## `filter-opts` : a map of indexed return values you want to filter the logs by e.g. {:valueA 1 :valueB 2}
+   ## `opts` : specifies additional filter options, can be one of:
+    * string 'latest' to specify that only new observed events should be processed
+    * map {:from-block 0 :to-block 100} specifying earliest and latest block on which the event handler should fire
+   ## `on-event` : event handler function
+   see https://github.com/ethereum/wiki/wiki/JavaScript-API#contract-events for additional details"
+  [contract event filter-opts opts on-event]
+  (apply web3-eth/contract-call (instance-from-arg contract) event
+         [filter-opts
+          opts
+          on-event]))
 
 (defn contract-event-in-tx [tx-hash contract event-name & args]
   (let [instance (instance-from-arg contract)
@@ -233,7 +250,6 @@
                     (reduced (js->cljkk evt))))))
             nil
             logs)))
-
 
 (defn contract-events-in-tx [tx-hash contract event-name & args]
   (let [instance (instance-from-arg contract)
@@ -259,11 +275,11 @@
                            (throw (js/Error. err)))
                          (let [all-logs (transform-fn (js->cljkk all-logs))]
                            (go-loop [logs all-logs]
-                                    (when (and (not @stopped?)
-                                               (seq logs))
-                                      (<! (timeout delay))
-                                      (callback nil (first logs))
-                                      (recur (rest logs)))))))
+                             (when (and (not @stopped?)
+                                        (seq logs))
+                               (<! (timeout delay))
+                               (callback nil (first logs))
+                               (recur (rest logs)))))))
 
     (aset event-filter "stopWatching" #(reset! stopped? true)) ;; So we can detect stopWatching was called
     event-filter))

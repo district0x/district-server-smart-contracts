@@ -21,6 +21,7 @@ Include `[district.server.smart-contracts]` in your CLJS file, where you use `mo
   - [contract-bin](#contract-bin)
   - [instance](#instance)
   - [contract-call](#contract-call)
+  - [create-event-filter](#create-event-filter)
   - [deploy-smart-contract!](#deploy-smart-contract!)
   - [write-smart-contracts!](#write-smart-contracts!)
   - [wait-for-tx-receipt](#wait-for-tx-receipt)
@@ -112,10 +113,10 @@ Returns contract's bin
 #### <a name="instance">`instance [contract-key & [contract-address]]`
 Returns contract's instance. If provided address, it will create instance related to given address
 
-#### <a name="contract-call">`contract-call [contract-key method args opts]`
+#### <a name="contract-call">`contract-call [contract method args opts]`
 Convenient wrapper around [cljs-web3](https://github.com/district0x/cljs-web3) contract-call function. <br>
 <br>
-* `contract-key` can be one of: 
+* `contract` can be one of: 
   * keyword (e.g `:my-contract`)
   * tuple: keyword + address, for contract at specific address (e.g `[:my-contract "0x575262e80edf7d4b39d95422f86195eb4c21bb52"]`)
   * tuple: keyword + keyword, to use ABI from first contract and address from second contract   (e.g `[:my-contract :my-other-contract]`)
@@ -126,7 +127,22 @@ Convenient wrapper around [cljs-web3](https://github.com/district0x/cljs-web3) c
   * `:from` From address, defaults to first address from your accounts
 
 Returns a Promise which resolves to the transaction-hash in the case of state-altering transactions or response in case of retrieve transactions.
- 
+
+#### <a name="create-event-filter">`create-event-filter [contract event filter-opts opts on-event]`
+Installs an event filter. <br>
+<br>
+* `contract` can be one of: 
+  * keyword (e.g `:my-contract`)
+  * tuple: keyword + address, for contract at specific address (e.g `[:my-contract "0x575262e80edf7d4b39d95422f86195eb4c21bb52"]`)
+  * tuple: keyword + keyword, to use ABI from first contract and address from second contract   (e.g `[:my-contract :my-other-contract]`)
+* `event` : :camel_case keyword for the event name e.g. `:my-event` 
+* `filter-opts` : map of indexed return values you want to filter the logs by (see [web3 documentation](https://github.com/ethereum/wiki/wiki/JavaScript-API#contract-events) for additional details").
+* `opts` : specifies additional filter options, can be one of:
+   * "latest" to specify that only new observed events should be processed.
+   * map `{:from-block 0 :to-block 100}` specifying earliest and latest block, on which the event handler should fire.
+* `on-event` : event handler function. <br>
+Returns event filter.
+
 #### <a name="deploy-smart-contract!">`deploy-smart-contract! [contract-key args opts]`
 Deploys contract to the blockchain. Returns contract object and also stores new address in internal state.   
 * `opts:`
@@ -182,5 +198,3 @@ node tests-compiled/run-tests.js
 # To run tests without REPL
 lein doo node "tests" once
 ```
-
-
