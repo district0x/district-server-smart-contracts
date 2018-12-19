@@ -8,7 +8,7 @@
   :once
   {:before (fn []
              (-> (mount/with-args
-                   {:web3 {:port 8548}
+                   {:web3 {:port 8549}
                     :smart-contracts {:contracts-var #'tests.smart-contracts/smart-contracts
                                       :print-gas-usage? true
                                       :auto-mining? true}})

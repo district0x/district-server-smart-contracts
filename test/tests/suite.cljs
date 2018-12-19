@@ -1,33 +1,54 @@
 (ns tests.suite
-  (:require [cljs.test :refer-macros [is testing]]
+  (:require [cljs.test :refer-macros [is testing async]]
             [district.server.smart-contracts :as contracts]))
 
 (defn test-smart-contracts []
   (testing "smart contracts test suite"
+
     (is (false? (empty? (contracts/contract-abi :my-contract))))
     (is (false? (empty? (contracts/contract-bin :my-contract))))
+
     (is (= (contracts/contract-address :my-contract) "0x0000000000000000000000000000000000000000"))
     (is (= (contracts/contract-name :my-contract) "MyContract"))
 
-    (is (map? (contracts/deploy-smart-contract! :my-contract {:arguments [1]})))
+    (async done
+           (let [ev-filter (partial contracts/create-event-filter :my-contract :on-counter-incremented {})]
+             (-> (contracts/deploy-smart-contract! :my-contract [1])
 
-    (is (not= (contracts/contract-address :my-contract) "0x0000000000000000000000000000000000000000"))
+                 (.then #(is (not= (contracts/contract-address :my-contract) "0x0000000000000000000000000000000000000000")))
 
-    (is (= 1 (.toNumber (contracts/contract-call :my-contract :counter))))
+                 (.then #(-> (contracts/contract-call :my-contract :counter)
+                             (.then (fn [counter] (is (= 1 (.toNumber counter)))))))
 
-    (is (= 5 (.toNumber (contracts/contract-call :my-contract :my-plus 2 3))))
+                 (.then #(-> (contracts/contract-call :my-contract :my-plus [2 3])
+                             (.then (fn [result] (is (= 5 (.toNumber result)))))))
 
-    (let [tx-hash (contracts/contract-call :my-contract :increment-counter 2 {:gas 500000})]
-      (is (string? tx-hash))
-      (let [{:keys [:args]} (contracts/contract-event-in-tx tx-hash :my-contract :on-counter-incremented)]
-        (is (= 3 (.toNumber (:the-counter args))))))
+                 (.then #(-> (contracts/contract-call :my-contract :increment-counter [2] {:gas 500000})
+                             (.then (fn [tx-hash]
+                                      (contracts/wait-for-tx-receipt tx-hash)))
+                             (.then (fn [{:keys [:transaction-hash]}]
+                                      (is (= 3 (-> (contracts/contract-event-in-tx transaction-hash :my-contract :on-counter-incremented)
+                                                   :args
+                                                   :the-counter
+                                                   .toNumber)))))))
 
-    (let [tx-hash (contracts/contract-call :my-contract :double-increment-counter 2 {:gas 500000})]
-      (is (string? tx-hash))
-      (is (= [5 7] (map (comp #(.toNumber %) :the-counter :args)
-                        (contracts/contract-events-in-tx tx-hash :my-contract :on-counter-incremented)))))
+                 (.then #(-> (contracts/contract-call :my-contract :double-increment-counter [2] {:gas 500000})
 
-    ;; corner case, function which returns address
-    (is (= "0xbeefbeefbeefbeefbeefbeefbeefbeefbeefbeef" (contracts/contract-call :my-contract :target)))
+                             (.then (fn [tx-hash]
+                                      (contracts/wait-for-tx-receipt tx-hash)))
 
-    (is (= 7 (.toNumber (contracts/contract-call :my-contract :counter))))))
+                             (.then (fn [{:keys [:transaction-hash]}]
+                                      (is (= [5 7] (map (comp (fn [x] (.toNumber x)) :the-counter :args)
+                                                        (contracts/contract-events-in-tx transaction-hash :my-contract :on-counter-incremented))))))))
+
+                 (.then #(-> (contracts/contract-call :my-contract :target)
+                             (.then (fn [target]
+                                      (is (= "0xbeefbeefbeefbeefbeefbeefbeefbeefbeefbeef" target))))))
+
+                 (.then #(-> (contracts/contract-call :my-contract :counter)
+                             (.then (fn [counter]
+                                      (is (= 7 (.toNumber counter)))))))
+
+                 (.then #(contracts/replay-past-events (apply ev-filter [{:from-block 0 :to-block "latest"}])
+                                                       (fn [_ {:keys [:args] :as evt}] (is (= 3 (-> args :the-counter .toNumber)))
+                                                         (done)))))))))

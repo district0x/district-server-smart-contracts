@@ -2,7 +2,7 @@
   (:require [cljs-web3.core :as web3]
             [cljs-web3.eth :as web3-eth]
             [cljs-web3.utils :refer [js->cljkk camel-case]]
-            [cljs.core.async :refer [<! >! timeout]]
+            [cljs.core.async :refer [<! timeout]]
             [cljs.core.match :refer-macros [match]]
             [cljs.nodejs :as nodejs]
             [cljs.pprint]
@@ -13,36 +13,29 @@
             [mount.core :as mount :refer [defstate]])
   (:require-macros [cljs.core.async.macros :refer [go-loop]]))
 
+(def fs (nodejs/require "fs"))
+(def process (nodejs/require "process"))
+
 (declare start)
+(declare wait-for-tx-receipt)
 
 (defstate smart-contracts :start (start (merge (:smart-contracts @config)
                                                (:smart-contracts (mount/args)))))
 
-(def fs (nodejs/require "fs"))
-(def process (nodejs/require "process"))
-(def deasync (nodejs/require "deasync"))
-
-
 (defn contract [contract-key]
   (get @(:contracts @smart-contracts) contract-key))
-
 
 (defn contract-address [contract-key]
   (:address (contract contract-key)))
 
-
 (defn contract-name [contract-key]
   (:name (contract contract-key)))
-
 
 (defn contract-abi [contract-key]
   (:abi (contract contract-key)))
 
-
 (defn contract-bin [contract-key]
   (:bin (contract contract-key)))
-
-(declare contract-call)
 
 (defn instance
   ([contract-key]
@@ -51,7 +44,6 @@
    (web3-eth/contract-at @web3 (contract-abi contract-key) (if (keyword? contract-key-or-addr)
                                                              (contract-address contract-key-or-addr)
                                                              contract-key-or-addr))))
-
 
 (defn update-contract! [contract-key contract]
   (swap! (:contracts @smart-contracts) update contract-key merge contract))
@@ -87,10 +79,10 @@
 
 (defn start [{:keys [contracts-build-path :contracts-var print-gas-usage?] :as opts}]
   (merge
-    {:contracts (atom (into {} (map (fn [[k v]]
-                                      [k (load-contract-files v opts)])
-                                    @contracts-var)))}
-    opts))
+   {:contracts (atom (into {} (map (fn [[k v]]
+                                     [k (load-contract-files v opts)])
+                                   @contracts-var)))}
+   opts))
 
 
 (defn link-library [bin placeholder library-address]
@@ -105,7 +97,7 @@
               (link-library bin placeholder address)))
           bin library-placeholders))
 
-(defn- handle-deployed-contract! [contract-key contract abi tx-hash]
+(defn- handle-deployed-contract! [contract-key {:keys [:abi :bin] :as contract} tx-hash]
   (let [{:keys [:gas-used :block-number :contract-address]} (web3-eth/get-transaction-receipt @web3 tx-hash)
         contract (merge contract {:instance (web3-eth/contract-at @web3 abi contract-address)
                                   :address contract-address})]
@@ -115,51 +107,37 @@
         (println (:name contract) contract-address (.toLocaleString gas-used)))
       contract)))
 
+(defn deploy-smart-contract!
+  "# arguments:
+     * `contract-key` keyword e.g. :some-contract
+   ## `args` is a vector of arguments for the constructor
+   ## `opts` is a map of options:
+    * `placeholder-replacements` : a map containing replacements for library placeholders
+    * `from` : address deploying the conract
+    * `:gas` : gas limit for the contract creation transaction
+   # returns:
+   function returns a Promise resolving to the deployed contracts address."
+  ([contract-key args {:keys [:placeholder-replacements :from :gas] :as opts}]
+   (let [{:keys [:abi :bin] :as contract} (load-contract-files (contract contract-key) @smart-contracts)
+         opts (merge {:data (str "0x" (link-contract-libraries @(:contracts @smart-contracts) bin placeholder-replacements))}
+                     (when-not from
+                       {:from (first (web3-eth/accounts @web3))})
+                     (when-not gas
+                       {:gas 4000000})
+                     opts)]
+     (-> (js/Promise.resolve
+          (-> (apply web3-eth/contract-new @web3 abi
+                     (merge args (select-keys opts [:from :to :gas-price :gas
+                                                    :value :data :nonce
+                                                    :condition])))
+              (aget "transactionHash")))
+         (.then #(wait-for-tx-receipt %))
+         (.then (fn [receipt]
+                  (handle-deployed-contract! contract-key contract (:transaction-hash receipt)))))))
 
-(defn- deploy-smart-contract* [contract-key {:keys [:placeholder-replacements :arguments]
-                                             :as opts} callback]
-  (let [{:keys [:abi :bin] :as contract} (load-contract-files (contract contract-key) @smart-contracts)]
-    (when-not bin
-      (throw (js/Error. (str "Contract " contract-key " is missing bin"))))
-    (let [opts (merge {:data (str "0x" (link-contract-libraries @(:contracts @smart-contracts) bin placeholder-replacements))
-                       :gas 4000000}
-                      (when-not (:from opts)
-                        {:from (first (web3-eth/accounts @web3))})
-                      opts)
-          Contract (apply web3-eth/contract-new @web3 abi (into (vec arguments) [(select-keys opts [:from :to :gas-price :gas
-                                                                                                    :value :data :nonce
-                                                                                                    :condition])]))
-          tx-hash (aget Contract "transactionHash")
-          filter-id (atom nil)]
-
-      (if-not (fn? callback)
-        (handle-deployed-contract! contract-key contract abi tx-hash)
-        (reset!
-          filter-id
-          (web3-eth/filter
-            @web3
-            "latest"
-            (fn [err]
-              (when err
-                (callback err))
-              (try
-                (when-let [contract (handle-deployed-contract! contract-key contract abi tx-hash)]
-                  (web3-eth/stop-watching! @filter-id)
-                  ;; reset is needed, otherwise web3 crashes with "Can't connect to" on next request
-                  ;; Reasons unknown. Needed only because of deasync hack
-                  (web3/reset @web3)
-                  (callback nil contract))
-                (catch js/Error err
-                  (callback err))))))))))
-
-
-(def deploy-smart-contract-deasynced (deasync deploy-smart-contract*))
-
-(defn deploy-smart-contract! [& args]
-  (if (:auto-mining? @smart-contracts)
-    (apply deploy-smart-contract* args)
-    (apply deploy-smart-contract-deasynced args)))
-
+  ([contract-key args]
+   (deploy-smart-contract! contract-key args {:from (first (web3-eth/accounts @web3))
+                                              :gas 4000000})))
 
 (defn write-smart-contracts! []
   (let [{:keys [:ns :file :name]} (meta (:contracts-var @smart-contracts))]
@@ -167,24 +145,13 @@
                     (str "(ns " ns ") \n\n"
                          "(def " name " \n"
                          (as-> @(:contracts @smart-contracts) $
-                               (map (fn [[k v]]
-                                      [k (dissoc v :instance :abi :bin)]) $)
-                               (into {} $)
-                               ;; cljs.pprint/write won't compile with simple optimisations
-                               ;; therefore must be required only in dev environment
-                               (cljs.pprint/write $ :stream nil))
+                           (map (fn [[k v]]
+                                  [k (dissoc v :instance :abi :bin)]) $)
+                           (into {} $)
+                           ;; cljs.pprint/write won't compile with simple optimisations
+                           ;; therefore must be required only in dev environment
+                           (cljs.pprint/write $ :stream nil))
                          ")"))))
-
-
-(defn- handle-contract-call
-  ([method tx-hash]
-   (handle-contract-call method tx-hash false))
-  ([method tx-hash print-gas-usage?]
-   (let [{:keys [:gas-used :block-number :status]} (web3-eth/get-transaction-receipt @web3 tx-hash)]
-     (when (and gas-used block-number)
-       (when print-gas-usage?
-         (println method (.toLocaleString gas-used) (if (zero? status) "failed" "")))
-       gas-used))))
 
 
 (defn- instance-from-arg [contract]
@@ -193,54 +160,77 @@
     (sequential? contract) (instance (first contract) (second contract))
     :else contract))
 
+;; TODO : add alts for definite timeout (or # of retries)
+(defn- wait-for-tx-receipt*
+  "callback is a nodejs style callback i.e. (fn [error data] ...)"
+  [tx-hash callback]
+  (web3-eth/get-transaction-receipt @web3 tx-hash (fn [error receipt]
+                                                    (if error
+                                                      (callback error nil)
+                                                      (if receipt
+                                                        (callback nil receipt)
+                                                        (js/setTimeout #(wait-for-tx-receipt* tx-hash callback) 1000))))))
 
-(defn contract-call* [contract-key method & args]
-  "contract-key parameter can be one of:
-   - keyword :some-contract
-   - tuple of keyword and address [:some-contract 0x1234...]
-   - instance SomeContract"
-  (let [deasync? (fn? (last args))
-        callback (when deasync? (last args))
-        args (if deasync? (drop-last args) args)
-        contract (instance-from-arg contract-key)
-        last-arg (last args)
-        args (if (and (map? last-arg)
-                      (not (:from last-arg)))
-               (concat (butlast args) [(merge last-arg {:from (first (web3-eth/accounts @web3))})])
-               args)
-        result (apply web3-eth/contract-call contract method args)
-        filter-id (atom nil)]
-    (if-not (fn? callback)
-      (do
-        (when (and (:print-gas-usage? @smart-contracts)
-                   (map? (last args))
-                   (string? result))
-          (handle-contract-call method result))
-        result)
-      (reset! filter-id
-              (web3-eth/filter
-               @web3
-               "latest"
-               (fn [err]
-                 (when err
-                   (callback err))
-                 (try
-                   (when (and (string? result)
-                              (map? (last args)))
-                     (loop [gas-used (handle-contract-call method result)]
-                       (when-not gas-used
-                         (recur (handle-contract-call method result (:print-gas-usage? @smart-contracts))))))
-                   (web3-eth/stop-watching! @filter-id)
-                   (callback nil result)
-                   (catch js/Error err
-                     (callback err)))))))))
+(defn wait-for-tx-receipt
+  "blocks until transaction `tx-hash` gets sent to the network."
+  [tx-hash]
+  (js/Promise. (fn [resolve reject]
+                 (wait-for-tx-receipt* tx-hash (fn [error tx-receipt]
+                                                 (if error
+                                                   (reject error)
+                                                   (resolve tx-receipt)))))))
 
-(def contract-call-deasynced (deasync contract-call*))
+(defn contract-call
+  "# arguments:
+   ## `contract` parameter can be one of:
+   * keyword :some-contract
+   * tuple of keyword and address [:some-contract 0x1234...]
+   * instance SomeContract
+   ## `method` is a :camel_case keyword corresponding to the smart-contract function
+   ## `args` is a vector of arguments for the `method`
+   ## `opts` is a map of options passed as message data
+   # returns:
+   function returns a Promise resolving to a transaction-hash (state-altering calls) or `method` return value (read-only calls)."
+  ([contract method args {:keys [:from :gas] :as opts}]
+   (let [opts (merge (when-not from
+                       {:from (first (web3-eth/accounts @web3))})
+                     (when-not gas
+                       {:gas 4000000})
+                     opts)]
+     (js/Promise. (fn [resolve reject]
+                    (apply web3-eth/contract-call (instance-from-arg contract) method
+                           (into args
+                                 [opts
+                                  (fn [err data]
+                                    (if err
+                                      (reject err)
+                                      (resolve data)))]))))))
 
-(defn contract-call [& args]
-  (if (:auto-mining? @smart-contracts)
-    (apply contract-call* args)
-    (apply contract-call-deasynced args)))
+  ([contract method args]
+   (contract-call contract method args {:from (first (web3-eth/accounts @web3))}))
+
+  ([contract method]
+   (contract-call contract method [] {:from (first (web3-eth/accounts @web3))})))
+
+(defn create-event-filter
+  "This function installs event filter
+   # arguments:
+   ## `contract` parameter can be one of:
+    * keyword :some-contract
+    * tuple of keyword and address [:some-contract 0x1234...]
+    * instance SomeContract
+   ## `event` : camel_case keyword corresponding to the smart-contract event
+   ## `filter-opts` : a map of indexed return values you want to filter the logs by e.g. {:valueA 1 :valueB 2}
+   ## `opts` : specifies additional filter options, can be one of:
+    * string 'latest' to specify that only new observed events should be processed
+    * map {:from-block 0 :to-block 100} specifying earliest and latest block on which the event handler should fire
+   ## `on-event` : event handler function
+   see https://github.com/ethereum/wiki/wiki/JavaScript-API#contract-events for additional details"
+  [contract event filter-opts opts on-event]
+  (apply web3-eth/contract-call (instance-from-arg contract) event
+         [filter-opts
+          opts
+          on-event]))
 
 (defn contract-event-in-tx [tx-hash contract event-name & args]
   (let [instance (instance-from-arg contract)
@@ -256,7 +246,6 @@
                     (reduced (js->cljkk evt))))))
             nil
             logs)))
-
 
 (defn contract-events-in-tx [tx-hash contract event-name & args]
   (let [instance (instance-from-arg contract)
@@ -282,11 +271,11 @@
                            (throw (js/Error. err)))
                          (let [all-logs (transform-fn (js->cljkk all-logs))]
                            (go-loop [logs all-logs]
-                                    (when (and (not @stopped?)
-                                               (seq logs))
-                                      (<! (timeout delay))
-                                      (callback nil (first logs))
-                                      (recur (rest logs)))))))
+                             (when (and (not @stopped?)
+                                        (seq logs))
+                               (<! (timeout delay))
+                               (callback nil (first logs))
+                               (recur (rest logs)))))))
 
     (aset event-filter "stopWatching" #(reset! stopped? true)) ;; So we can detect stopWatching was called
     event-filter))
