@@ -14,6 +14,9 @@
     (async done
            (-> (contracts/deploy-smart-contract! :my-contract [1])
 
+               (.then #(contracts/create-event-filter :my-contract :on-counter-incremented {} "latest" (fn []
+                                                                                                         (is (= "MyContract" (:name %))))))
+
                (.then #(is (not= (contracts/contract-address :my-contract) "0x0000000000000000000000000000000000000000")))
 
                (.then #(-> (contracts/contract-call :my-contract :counter)
@@ -42,7 +45,6 @@
 
                (.then #(-> (contracts/contract-call :my-contract :target)
                            (.then (fn [target]
-                                    ;; corner case, function which returns address
                                     (is (= "0xbeefbeefbeefbeefbeefbeefbeefbeefbeefbeef" target))))))
 
                (.then #(-> (contracts/contract-call :my-contract :counter)

@@ -176,15 +176,16 @@ Will return first contract event with name `event-name` that occured during exec
 ```
 
 #### <a name="contract-events-in-tx">`contract-events-in-tx [tx-hash contract-key event-name & args]`
-The same as `contract-event-in-tx` but instead of first event, returns collection of all events with name `event-name`
+The same as `contract-event-in-tx` but instead of first event, returns collection of all events with name `event-name`.
 
 #### <a name="replay-past-events">`replay-past-events [event-filter callback opts]`
 Reruns all past events and calls callback for each one. This is similiar to what you do with normal web3 event filter, but with this one you can slow down rate at which callbacks are fired. 
 Helps in case you have large number of events with slow callbacks, to prevent unresponsive app. 
 ```clojure
-(-> (contracts/contract-call :my-contract :on-some-event {:from-block 0})
+(-> (contracts/create-event-filter :my-contract :on-some-event {} {:from-block 0})
   (replay-past-events on-some-event {:delay 10})) ;; in ms
 ```
+
 ## Development
 ```bash
 # To start REPL and run tests
