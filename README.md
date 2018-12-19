@@ -115,7 +115,7 @@ Returns contract's instance. If provided address, it will create instance relate
 
 #### <a name="contract-call">`contract-call [contract method args opts]`
 Convenient wrapper around [cljs-web3](https://github.com/district0x/cljs-web3) contract-call function. <br>
-<br>
+*Note* : This function needs an unlocked account for signing the transaction! <br>
 * `contract` can be one of: 
   * keyword (e.g `:my-contract`)
   * tuple: keyword + address, for contract at specific address (e.g `[:my-contract "0x575262e80edf7d4b39d95422f86195eb4c21bb52"]`)
@@ -144,7 +144,8 @@ Installs an event filter. <br>
 Returns event filter.
 
 #### <a name="deploy-smart-contract!">`deploy-smart-contract! [contract-key args opts]`
-Deploys contract to the blockchain. Returns contract object and also stores new address in internal state.   
+Deploys contract to the blockchain. Returns contract object and also stores new address in internal state. <br>
+*Note* : This function needs an unlocked account for signing the transaction! <br>
 * `opts:`
   * `:arguments` Arguments passed to a contract constructor
   * `:gas` Gas limit, default 4M

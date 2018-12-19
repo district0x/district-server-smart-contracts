@@ -2,7 +2,7 @@
   (:require [cljs-web3.core :as web3]
             [cljs-web3.eth :as web3-eth]
             [cljs-web3.utils :refer [js->cljkk camel-case]]
-            [cljs.core.async :refer [<! >! timeout]]
+            [cljs.core.async :refer [<! timeout]]
             [cljs.core.match :refer-macros [match]]
             [cljs.nodejs :as nodejs]
             [cljs.pprint]
@@ -11,7 +11,7 @@
             [district.server.config :refer [config]]
             [district.server.web3 :refer [web3]]
             [mount.core :as mount :refer [defstate]])
-  (:require-macros [cljs.core.async.macros :refer [go-loop go]]))
+  (:require-macros [cljs.core.async.macros :refer [go-loop]]))
 
 (def fs (nodejs/require "fs"))
 (def process (nodejs/require "process"))
@@ -116,7 +116,7 @@
     * `from` : address deploying the conract
     * `:gas` : gas limit for the contract creation transaction
    # returns:
-   function returns a Promise"
+   function returns a Promise resolving to the deployed contracts address."
   ([contract-key args {:keys [:placeholder-replacements :from :gas] :as opts}]
    (let [{:keys [:abi :bin] :as contract} (load-contract-files (contract contract-key) @smart-contracts)
          opts (merge {:data (str "0x" (link-contract-libraries @(:contracts @smart-contracts) bin placeholder-replacements))}
@@ -167,13 +167,9 @@
   (web3-eth/get-transaction-receipt @web3 tx-hash (fn [error receipt]
                                                     (if error
                                                       (callback error nil)
-                                                      (go
-                                                        (if receipt
-                                                          (callback nil receipt)
-                                                          (do
-                                                            ;; try again in 1K millis
-                                                            (<! (timeout 1000))
-                                                            (wait-for-tx-receipt* tx-hash callback))))))))
+                                                      (if receipt
+                                                        (callback nil receipt)
+                                                        (js/setTimeout #(wait-for-tx-receipt* tx-hash callback) 1000))))))
 
 (defn wait-for-tx-receipt
   "blocks until transaction `tx-hash` gets sent to the network."
@@ -194,7 +190,7 @@
    ## `args` is a vector of arguments for the `method`
    ## `opts` is a map of options passed as message data
    # returns:
-   function returns a Promise"
+   function returns a Promise resolving to a transaction-hash (state-altering calls) or `method` return value (read-only calls)."
   ([contract method args {:keys [:from :gas] :as opts}]
    (let [opts (merge (when-not from
                        {:from (first (web3-eth/accounts @web3))})
@@ -203,12 +199,12 @@
                      opts)]
      (js/Promise. (fn [resolve reject]
                     (apply web3-eth/contract-call (instance-from-arg contract) method
-                           (merge args
-                                  opts
+                           (into args
+                                 [opts
                                   (fn [err data]
                                     (if err
                                       (reject err)
-                                      (resolve data)))))))))
+                                      (resolve data)))]))))))
 
   ([contract method args]
    (contract-call contract method args {:from (first (web3-eth/accounts @web3))}))
