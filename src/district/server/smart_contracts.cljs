@@ -2,7 +2,7 @@
   (:require [cljs-web3.core :as web3]
             [cljs-web3.eth :as web3-eth]
             [cljs-web3.utils :refer [js->cljkk camel-case]]
-            [cljs.core.async :refer [<! timeout]]
+            [cljs.core.async :refer [<! timeout] :as async]
             [cljs.core.match :refer-macros [match]]
             [cljs.nodejs :as nodejs]
             [cljs.pprint]
@@ -279,3 +279,31 @@
 
     (aset event-filter "stopWatching" #(reset! stopped? true)) ;; So we can detect stopWatching was called
     event-filter))
+
+(defn replay-past-events-in-order
+  "Given a collection of filters get all past
+  events from the filters, sorts them by :block-number :transaction-index :log-index
+  and callback each of them in order."
+  [event-filters callback]
+
+  ;; install all get filters
+  (let [all-evs-ch (for [filter event-filters]
+                     (let [pch (async/promise-chan)]
+                       (.get filter
+                             (fn [err res]
+                               (when err (println (js/Error. err)))
+                               (let [filter-events (js->cljkk res)]
+                                 (async/put! pch filter-events))))
+                       pch))]
+
+    ;; go chan by chan collecting events
+    (go-loop [all-events []
+              [ch & r] all-evs-ch]
+      (if ch
+        (let [evs (async/<! ch)]
+          (recur (into all-events evs) r)) ;; keep collecting
+
+        ;; no more channels to read, sort and callback
+        (doseq [e (->> all-events
+                       (sort-by (juxt :block-number :transaction-index :log-index)))]
+            (callback e))))))
