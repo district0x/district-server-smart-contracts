@@ -28,18 +28,19 @@ Include `[district.server.smart-contracts]` in your CLJS file, where you use `mo
   - [contract-event-in-tx](#contract-event-in-tx)
   - [contract-events-in-tx](#contract-events-in-tx)
   - [replay-past-events](#replay-past-events)
+  - [replay-past-events-in-order](#replay-past-events-in-order)
 
 ## Real-world example
-To see how district server modules play together in real-world app, you can take a look at [NameBazaar server folder](https://github.com/district0x/name-bazaar/tree/master/src/name_bazaar/server), 
+To see how district server modules play together in real-world app, you can take a look at [NameBazaar server folder](https://github.com/district0x/name-bazaar/tree/master/src/name_bazaar/server),
 where this is deployed in production.
 
 ## Usage
-You can pass following args to smart-contracts module: 
+You can pass following args to smart-contracts module:
 * `:contracts-build-path` Path to your compiled smart contracts, where you have .bin and .abi files. (default: `"<cwd>/resources/public/contracts/build/"`)
 * `:contracts-var` Var of smart-contracts map in namespace where you want to store addresses of deployed smart-contracts
-* `:print-gas-usage?` If true, will print gas usage after each contract deployment or state function call. Useful for development. 
+* `:print-gas-usage?` If true, will print gas usage after each contract deployment or state function call. Useful for development.
 
-Since every time we deploy a smart-contract, it has different address, we need way to store it in a file, so both server and UI can access it, even after restart. For this purpose, we create a namespace containing only smart-contract names and addresses, that will be modified automatically by this module. For example: 
+Since every time we deploy a smart-contract, it has different address, we need way to store it in a file, so both server and UI can access it, even after restart. For this purpose, we create a namespace containing only smart-contract names and addresses, that will be modified automatically by this module. For example:
 ```clojure
 (ns my-district.smart-contracts)
 
@@ -116,11 +117,11 @@ Returns contract's instance. If provided address, it will create instance relate
 #### <a name="contract-call">`contract-call [contract method args opts]`
 Convenient wrapper around [cljs-web3](https://github.com/district0x/cljs-web3) contract-call function. <br>
 *Note* : This function needs an unlocked account for signing the transaction! <br>
-* `contract` can be one of: 
+* `contract` can be one of:
   * keyword (e.g `:my-contract`)
   * tuple: keyword + address, for contract at specific address (e.g `[:my-contract "0x575262e80edf7d4b39d95422f86195eb4c21bb52"]`)
   * tuple: keyword + keyword, to use ABI from first contract and address from second contract   (e.g `[:my-contract :my-other-contract]`)
-* `method` : keyword for the method name e.g. `:my-method` 
+* `method` : keyword for the method name e.g. `:my-method`
 * `args` : a vector of arguments for `method` (optional)
 * `opts:` map of options passed as message data (optional), possible keys include:
   * `:gas` Gas limit, default 4M
@@ -131,11 +132,11 @@ Returns a Promise which resolves to the transaction-hash in the case of state-al
 #### <a name="create-event-filter">`create-event-filter [contract event filter-opts opts on-event]`
 Installs an event filter. <br>
 <br>
-* `contract` can be one of: 
+* `contract` can be one of:
   * keyword (e.g `:my-contract`)
   * tuple: keyword + address, for contract at specific address (e.g `[:my-contract "0x575262e80edf7d4b39d95422f86195eb4c21bb52"]`)
   * tuple: keyword + keyword, to use ABI from first contract and address from second contract   (e.g `[:my-contract :my-other-contract]`)
-* `event` : :camel_case keyword for the event name e.g. `:my-event` 
+* `event` : :camel_case keyword for the event name e.g. `:my-event`
 * `filter-opts` : map of indexed return values you want to filter the logs by (see [web3 documentation](https://github.com/ethereum/wiki/wiki/JavaScript-API#contract-events) for additional details").
 * `opts` : specifies additional filter options, can be one of:
    * "latest" to specify that only new observed events should be processed.
@@ -162,13 +163,13 @@ Deploys contract to the blockchain. Returns contract object and also stores new 
 Returns a Promise which resolves to the contracts address.
 
 #### <a name="write-smart-contracts!">`write-smart-contracts! []`
-Writes smart-contracts that are currently in module's state into file that was passed to `:contracts-var`.    
+Writes smart-contracts that are currently in module's state into file that was passed to `:contracts-var`.
 
 #### <a name="wait-for-tx-receipt">`wait-for-tx-receipt [tx-hash]`
-Function blocks until transaction is transmitted to the network, returns a Promise which resolves to the receipt. 
+Function blocks until transaction is transmitted to the network, returns a Promise which resolves to the receipt.
 
 #### <a name="contract-event-in-tx">`contract-event-in-tx [tx-hash contract-key event-name & args]`
-Will return first contract event with name `event-name` that occured during execution of transaction with hash `tx-hash`. This is useful, when you look for data in specific event after doing some transaction. For example in tests, or mock data generating. Advantage is that this function is synchronous, compared to setting up event filter with web3. 
+Will return first contract event with name `event-name` that occured during execution of transaction with hash `tx-hash`. This is useful, when you look for data in specific event after doing some transaction. For example in tests, or mock data generating. Advantage is that this function is synchronous, compared to setting up event filter with web3.
 ```clojure
 (let [opts {:gas 200000 :from some-address}
       tx-hash (contracts/contract-call :my-contract :fn-that-fires-event)]
@@ -180,11 +181,20 @@ Will return first contract event with name `event-name` that occured during exec
 The same as `contract-event-in-tx` but instead of first event, returns collection of all events with name `event-name`.
 
 #### <a name="replay-past-events">`replay-past-events [event-filter callback opts]`
-Reruns all past events and calls callback for each one. This is similiar to what you do with normal web3 event filter, but with this one you can slow down rate at which callbacks are fired. 
-Helps in case you have large number of events with slow callbacks, to prevent unresponsive app. 
+Reruns all past events and calls callback for each one. This is similiar to what you do with normal web3 event filter, but with this one you can slow down rate at which callbacks are fired.
+Helps in case you have large number of events with slow callbacks, to prevent unresponsive app.
 ```clojure
 (-> (contracts/create-event-filter :my-contract :on-some-event {} {:from-block 0})
   (replay-past-events on-some-event {:delay 10})) ;; in ms
+```
+
+#### <a name="replay-past-events-in-order">`replay-past-events-in-order [event-filters callback]`
+Given a collection of filters get all past events from the filters, sorts them by :block-number :transaction-index :log-index and calls callback for each one in order.
+
+```clojure
+(-> [(contracts/create-event-filter :my-contract :on-some-event {} {:from-block 0})
+     (contracts/create-event-filter :my-other-contract :on-some-other-event {} {:from-block 0})]
+     (replay-past-events-in-order #(println %)))
 ```
 
 ## Development

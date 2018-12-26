@@ -284,7 +284,7 @@
   "Given a collection of filters get all past
   events from the filters, sorts them by :block-number :transaction-index :log-index
   and callback each of them in order."
-  [event-filters ev-callback]
+  [event-filters callback]
 
   ;; install all get filters
   (let [all-evs-ch (for [filter event-filters]
