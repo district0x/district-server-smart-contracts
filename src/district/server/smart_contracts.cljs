@@ -303,7 +303,8 @@
                              (fn [err logs]
                                (let [logs (->> (js->cljkk logs)
                                             (map #(update % :event (comp keyword kebab-case)))
-                                            (map #(assoc % :contract (contract-by-address (:address %))))
+                                            (map #(assoc % :contract (dissoc (contract-by-address (:address %))
+                                                                             :abi :bin)))
                                             (map transform-fn))]
                                  (async/put! logs-ch {:err err :logs logs}))))
                        logs-ch))]
@@ -312,8 +313,8 @@
     (go-loop [all-logs []
               [logs-ch & rest-logs] logs-chans]
       (if logs-ch
-        (let [{:keys [:err :logs :callbacks]} (async/<! logs-ch)
-              logs (map #(assoc % :err err :callbacks callbacks) logs)]
+        (let [{:keys [:err :logs]} (async/<! logs-ch)
+              logs (map #(assoc % :err err) logs)]
           (recur (into all-logs logs) rest-logs))           ;; keep collecting
         ;; no more channels to read, sort and callback
 
