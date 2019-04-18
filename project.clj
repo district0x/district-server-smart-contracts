@@ -1,4 +1,4 @@
-(defproject district0x/district-server-smart-contracts "1.0.12-SNAPSHOT"
+(defproject district0x/district-server-smart-contracts "1.0.13-SNAPSHOT"
   :description "district0x server module for handling smart-contracts"
   :url "https://github.com/district0x/district-server-smart-contracts"
   :license {:name "Eclipse Public License"
@@ -27,12 +27,10 @@
 
   :clean-targets ^{:protect false} ["target" "tests-compiled"]
 
-  :profiles {:dev {:dependencies [
-                                  [com.cemerick/piggieback "0.2.2"]
+  :profiles {:dev {:dependencies [[com.cemerick/piggieback "0.2.2"]
                                   [figwheel-sidecar "0.5.16"]
                                   [lein-doo "0.1.8"]
-                                  [org.clojure/clojure "1.9.0"]
-                                  ]
+                                  [org.clojure/clojure "1.9.0"]]
                    :source-paths ["dev" "src"]
                    :resource-paths ["resources"]}}
 

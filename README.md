@@ -183,18 +183,34 @@ The same as `contract-event-in-tx` but instead of first event, returns collectio
 #### <a name="replay-past-events">`replay-past-events [event-filter callback opts]`
 Reruns all past events and calls callback for each one. This is similiar to what you do with normal web3 event filter, but with this one you can slow down rate at which callbacks are fired.
 Helps in case you have large number of events with slow callbacks, to prevent unresponsive app.
+Opts you can pass: 
+* `:delay` - To put delay in between callbacks in ms
+* `:transform-fn` - Will be called for each event
+* `:on-finish` - Will be called after calling callback for all events
+
+
 ```clojure
 (-> (contracts/create-event-filter :my-contract :on-some-event {} {:from-block 0})
   (replay-past-events on-some-event {:delay 10})) ;; in ms
 ```
 
-#### <a name="replay-past-events-in-order">`replay-past-events-in-order [event-filters callback]`
+#### <a name="replay-past-events-in-order">`replay-past-events-in-order [event-filters callback opts]`
 Given a collection of filters get all past events from the filters, sorts them by :block-number :transaction-index :log-index and calls callback for each one in order.
+Event passed into callback contains `:contract` and `:event` keys, to easily identify the event.
+Opts you can pass: 
+* `:delay` - To put delay in between callbacks in ms
+* `:transform-fn` - Will be called for each event, before sorting occurs
+* `:on-finish` - Will be called after calling callback for all events
+
 
 ```clojure
-(-> [(contracts/create-event-filter :my-contract :on-some-event {} {:from-block 0})
-     (contracts/create-event-filter :my-other-contract :on-some-other-event {} {:from-block 0})]
-     (replay-past-events-in-order #(println %)))
+(contracts/replay-past-events-in-order
+   [(contracts/create-event-filter :my-contract :on-special-event {} {:from-block 0 :to-block "latest"})
+    (contracts/create-event-filter :my-contract :on-counter-incremented {} {:from-block 0 :to-block "latest"})]
+   (fn [err evt]
+    (println "Contract: " (:name (:contract evt)) ", event: " (:event evt) ", args: " (:args evt)))
+   {:on-finish (fn []
+                 (println "Finished calling callbacks"))})
 ```
 
 ## Development

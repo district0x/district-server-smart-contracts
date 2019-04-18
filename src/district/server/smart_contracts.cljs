@@ -1,7 +1,7 @@
 (ns district.server.smart-contracts
   (:require [cljs-web3.core :as web3]
             [cljs-web3.eth :as web3-eth]
-            [cljs-web3.utils :refer [js->cljkk camel-case]]
+            [cljs-web3.utils :refer [js->cljkk camel-case kebab-case]]
             [cljs.core.async :refer [<! timeout] :as async]
             [cljs.core.match :refer-macros [match]]
             [cljs.nodejs :as nodejs]
@@ -44,6 +44,16 @@
    (web3-eth/contract-at @web3 (contract-abi contract-key) (if (keyword? contract-key-or-addr)
                                                              (contract-address contract-key-or-addr)
                                                              contract-key-or-addr))))
+
+
+(defn contract-by-address [contract-address]
+  (reduce
+    (fn [_ [_ {:keys [:address] :as contract}]]
+      (when (= contract-address address)
+        (reduced contract)))
+    nil
+    @(:contracts @smart-contracts)))
+
 
 (defn update-contract! [contract-key contract]
   (swap! (:contracts @smart-contracts) update contract-key merge contract))
@@ -226,11 +236,11 @@
     * map {:from-block 0 :to-block 100} specifying earliest and latest block on which the event handler should fire
    ## `on-event` : event handler function
    see https://github.com/ethereum/wiki/wiki/JavaScript-API#contract-events for additional details"
-  [contract event filter-opts opts on-event]
+  [contract event filter-opts opts & [on-event]]
   (apply web3-eth/contract-call (instance-from-arg contract) event
          [filter-opts
           opts
-          on-event]))
+          (or on-event identity)]))
 
 (defn contract-event-in-tx [tx-hash contract event-name & args]
   (let [instance (instance-from-arg contract)
@@ -263,7 +273,7 @@
             logs)))
 
 
-(defn replay-past-events [event-filter callback & [{:keys [:delay :transform-fn]
+(defn replay-past-events [event-filter callback & [{:keys [:delay :transform-fn :on-finish]
                                                     :or {delay 0 transform-fn identity}}]]
   (let [stopped? (atom false)]
     (.get event-filter (fn [err all-logs]
@@ -271,39 +281,56 @@
                            (throw (js/Error. err)))
                          (let [all-logs (transform-fn (js->cljkk all-logs))]
                            (go-loop [logs all-logs]
-                             (when (and (not @stopped?)
-                                        (seq logs))
-                               (<! (timeout delay))
-                               (callback nil (first logs))
-                               (recur (rest logs)))))))
+                             (when (not @stopped?)
+                               (if (seq logs)
+                                 (do
+                                   (<! (timeout delay))
+                                   (callback nil (first logs))
+                                   (recur (rest logs)))
+                                 (when (fn? on-finish)
+                                   (on-finish))))))))
 
     (aset event-filter "stopWatching" #(reset! stopped? true)) ;; So we can detect stopWatching was called
     event-filter))
 
-(defn replay-past-events-in-order
-  "Given a collection of filters get all past
-  events from the filters, sorts them by :block-number :transaction-index :log-index
-  and callback each of them in order."
-  [event-filters callback]
 
-  ;; install all get filters
-  (let [all-evs-ch (for [filter event-filters]
-                     (let [pch (async/promise-chan)]
-                       (.get filter
-                             (fn [err res]
-                               (when err (println (js/Error. err)))
-                               (let [filter-events (js->cljkk res)]
-                                 (async/put! pch filter-events))))
-                       pch))]
+(defn replay-past-events-in-order [event-filters callback & [{:keys [:delay :transform-fn :on-finish]
+                                                              :or {delay 0 transform-fn identity}}]]
+  (let [stopped? (atom false)
+        logs-chans (for [event-filter event-filters]
+                     (let [logs-ch (async/promise-chan)]
+                       (.get event-filter
+                             (fn [err logs]
+                               (let [logs (->> (js->cljkk logs)
+                                            (map #(update % :event (comp keyword kebab-case)))
+                                            (map #(assoc % :contract (contract-by-address (:address %))))
+                                            (map transform-fn))]
+                                 (async/put! logs-ch {:err err :logs logs}))))
+                       logs-ch))]
 
     ;; go chan by chan collecting events
-    (go-loop [all-events []
-              [ch & r] all-evs-ch]
-      (if ch
-        (let [evs (async/<! ch)]
-          (recur (into all-events evs) r)) ;; keep collecting
-
+    (go-loop [all-logs []
+              [logs-ch & rest-logs] logs-chans]
+      (if logs-ch
+        (let [{:keys [:err :logs :callbacks]} (async/<! logs-ch)
+              logs (map #(assoc % :err err :callbacks callbacks) logs)]
+          (recur (into all-logs logs) rest-logs))           ;; keep collecting
         ;; no more channels to read, sort and callback
-        (doseq [e (->> all-events
-                       (sort-by (juxt :block-number :transaction-index :log-index)))]
-            (callback e))))))
+
+        (let [sorted-logs (sort-by (juxt :block-number :transaction-index :log-index) all-logs)]
+          (go-loop [logs sorted-logs]
+            (when (not @stopped?)
+              (if (seq logs)
+                (do
+                  (when (pos? delay)
+                    (<! (timeout delay)))
+                  (let [first-log (first logs)]
+                    (when (fn? callback)
+                      (callback (:err first-log) (first logs))))
+                  (recur (rest logs)))
+
+                (when (fn? on-finish)
+                  (on-finish sorted-logs))))))))
+    (doseq [event-filter event-filters]
+      (aset event-filter "stopWatching" #(reset! stopped? true)))
+    event-filters))
