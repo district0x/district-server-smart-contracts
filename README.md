@@ -47,7 +47,11 @@ Since every time we deploy a smart-contract, it has different address, we need w
 (def smart-contracts
   {:my-contract
    {:name "MyContract", ;; By this name .abi and .bin files are loaded
-    :address "0x0000000000000000000000000000000000000000"}})
+    :address "0x0000000000000000000000000000000000000000"}
+   :my-contract-fwd ;; If you're using forwarder smart contract, define :forwards-to with key of a contract forwarded to
+   {:name "Forwarder"
+    :address "0x0000000000000000000000000000000000000000"
+    :forwards-to :my-contract}})
 ```
 
 That's all that's needed there. Let's see how can snippet using it look like:
@@ -119,6 +123,8 @@ Convenient wrapper around [cljs-web3](https://github.com/district0x/cljs-web3) c
 *Note* : This function needs an unlocked account for signing the transaction! <br>
 * `contract` can be one of:
   * keyword (e.g `:my-contract`)
+  * keyword of forwarder (e.g `my-contract-fwd`): If you defined `:forwards-to` in your smart-contracts definition, you can just use the key of 
+  forwarder and it'll know, that it should use ABI of contract in `:forwards-to`. 
   * tuple: keyword + address, for contract at specific address (e.g `[:my-contract "0x575262e80edf7d4b39d95422f86195eb4c21bb52"]`)
   * tuple: keyword + keyword, to use ABI from first contract and address from second contract   (e.g `[:my-contract :my-other-contract]`)
 * `method` : keyword for the method name e.g. `:my-method`
@@ -126,6 +132,7 @@ Convenient wrapper around [cljs-web3](https://github.com/district0x/cljs-web3) c
 * `opts:` map of options passed as message data (optional), possible keys include:
   * `:gas` Gas limit, default 4M
   * `:from` From address, defaults to first address from your accounts
+  * `:ignore-forward?` Will ignore if contract has property `:forwards-to` and will use ABI of a forwarder
 
 Returns a Promise which resolves to the transaction-hash in the case of state-altering transactions or response in case of retrieve transactions.
 
@@ -185,7 +192,7 @@ Reruns all past events and calls callback for each one. This is similiar to what
 Helps in case you have large number of events with slow callbacks, to prevent unresponsive app.
 Opts you can pass: 
 * `:delay` - To put delay in between callbacks in ms
-* `:transform-fn` - Will be called for each event
+* `:transform-fn` - Function to transform collection of events
 * `:on-finish` - Will be called after calling callback for all events
 
 
@@ -199,7 +206,7 @@ Given a collection of filters get all past events from the filters, sorts them b
 Event passed into callback contains `:contract` and `:event` keys, to easily identify the event.
 Opts you can pass: 
 * `:delay` - To put delay in between callbacks in ms
-* `:transform-fn` - Will be called for each event, before sorting occurs
+* `:transform-fn` - Function to transform collection of sorted events
 * `:on-finish` - Will be called after calling callback for all events
 
 

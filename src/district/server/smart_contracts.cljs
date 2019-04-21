@@ -39,7 +39,10 @@
 
 (defn instance
   ([contract-key]
-   (:instance (contract contract-key)))
+   (let [contr (contract contract-key)]
+     (if-not (:forwards-to contr)
+       (:instance contr)
+       (instance (:forwards-to contr) contract-key))))
   ([contract-key contract-key-or-addr]
    (web3-eth/contract-at @web3 (contract-abi contract-key) (if (keyword? contract-key-or-addr)
                                                              (contract-address contract-key-or-addr)
@@ -48,9 +51,9 @@
 
 (defn contract-by-address [contract-address]
   (reduce
-    (fn [_ [_ {:keys [:address] :as contract}]]
+    (fn [_ [contract-key {:keys [:address] :as contract}]]
       (when (= contract-address address)
-        (reduced contract)))
+        (reduced (assoc contract :contract-key contract-key))))
     nil
     @(:contracts @smart-contracts)))
 
@@ -164,11 +167,13 @@
                          ")"))))
 
 
-(defn- instance-from-arg [contract]
+(defn- instance-from-arg [contract & [{:keys [:ignore-forward?]}]]
   (cond
+    (and ignore-forward? (keyword? contract)) (instance contract contract)
     (keyword? contract) (instance contract)
     (sequential? contract) (instance (first contract) (second contract))
     :else contract))
+
 
 ;; TODO : add alts for definite timeout (or # of retries)
 (defn- wait-for-tx-receipt*
@@ -201,14 +206,14 @@
    ## `opts` is a map of options passed as message data
    # returns:
    function returns a Promise resolving to a transaction-hash (state-altering calls) or `method` return value (read-only calls)."
-  ([contract method args {:keys [:from :gas] :as opts}]
+  ([contract method args {:keys [:from :gas :ignore-forward?] :as opts}]
    (let [opts (merge (when-not from
                        {:from (first (web3-eth/accounts @web3))})
                      (when-not gas
                        {:gas 4000000})
-                     opts)]
+                     (dissoc opts :ignore-forward?))]
      (js/Promise. (fn [resolve reject]
-                    (apply web3-eth/contract-call (instance-from-arg contract) method
+                    (apply web3-eth/contract-call (instance-from-arg contract {:ignore-forward? ignore-forward?}) method
                            (into args
                                  [opts
                                   (fn [err data]
@@ -221,6 +226,18 @@
 
   ([contract method]
    (contract-call contract method [] {:from (first (web3-eth/accounts @web3))})))
+
+
+(defn- enrich-event-log [log]
+  (-> log
+    (update :event (fn [event-name]
+                     (if (= (first event-name)
+                            (string/upper-case (first event-name)))
+                       (keyword event-name)
+                       (kebab-case (keyword event-name)))))
+    (assoc :contract (dissoc (contract-by-address (:address log))
+                             :abi :bin :instance))))
+
 
 (defn create-event-filter
   "This function installs event filter
@@ -236,11 +253,16 @@
     * map {:from-block 0 :to-block 100} specifying earliest and latest block on which the event handler should fire
    ## `on-event` : event handler function
    see https://github.com/ethereum/wiki/wiki/JavaScript-API#contract-events for additional details"
-  [contract event filter-opts opts & [on-event]]
-  (apply web3-eth/contract-call (instance-from-arg contract) event
+  [contract event filter-opts opts & [on-event {:keys [:ignore-forward?]}]]
+  (apply web3-eth/contract-call (instance-from-arg contract {:ignore-forward? ignore-forward?}) event
          [filter-opts
           opts
-          (or on-event identity)]))
+          (fn [err log]
+            (when on-event
+              (if-not log
+                (on-event err log)
+                (on-event err (enrich-event-log log)))))]))
+
 
 (defn contract-event-in-tx [tx-hash contract event-name & args]
   (let [instance (instance-from-arg contract)
@@ -302,10 +324,7 @@
                        (.get event-filter
                              (fn [err logs]
                                (let [logs (->> (js->cljkk logs)
-                                            (map #(update % :event (comp keyword kebab-case)))
-                                            (map #(assoc % :contract (dissoc (contract-by-address (:address %))
-                                                                             :abi :bin)))
-                                            (map transform-fn))]
+                                            (map enrich-event-log))]
                                  (async/put! logs-ch {:err err :logs logs}))))
                        logs-ch))]
 
@@ -318,7 +337,7 @@
           (recur (into all-logs logs) rest-logs))           ;; keep collecting
         ;; no more channels to read, sort and callback
 
-        (let [sorted-logs (sort-by (juxt :block-number :transaction-index :log-index) all-logs)]
+        (let [sorted-logs (transform-fn (sort-by (juxt :block-number :transaction-index :log-index) all-logs))]
           (go-loop [logs sorted-logs]
             (when (not @stopped?)
               (if (seq logs)

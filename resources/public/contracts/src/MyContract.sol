@@ -16,6 +16,10 @@ contract MyContract {
     return a + b;
   }
 
+  function setCounter(uint i) {
+    counter = i;
+  }
+
   function incrementCounter(uint i) {
     counter += i;
     onCounterIncremented(counter);

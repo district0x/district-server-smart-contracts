@@ -96,19 +96,63 @@
         (.then #(contracts/contract-call :my-contract :fire-special-event [2] {:gas 500000}))
         (.then #(contracts/contract-call :my-contract :increment-counter [3] {:gas 500000}))
         (.then (fn []
-                 (let [expected-events [["MyContract" :on-counter-incremented {:the-counter 3}]
-                                        ["MyContract" :on-counter-incremented {:the-counter 5}]
-                                        ["MyContract" :on-special-event {:some-param 1}]
-                                        ["MyContract" :on-special-event {:some-param 2}]
-                                        ["MyContract" :on-counter-incremented {:the-counter 8}]]
+                 (let [expected-events [["MyContract" :my-contract :on-counter-incremented {:the-counter 3}]
+                                        ["MyContract" :my-contract :on-counter-incremented {:the-counter 5}]
+                                        ["MyContract" :my-contract :on-special-event {:some-param 1}]
+                                        ["MyContract" :my-contract :on-special-event {:some-param 2}]
+                                        ["MyContract" :my-contract :on-counter-incremented {:the-counter 8}]]
                        actual-events (atom [])]
                    (contracts/replay-past-events-in-order
                      [(contracts/create-event-filter :my-contract :on-special-event {} {:from-block 0 :to-block "latest"})
                       (contracts/create-event-filter :my-contract :on-counter-incremented {} {:from-block 0 :to-block "latest"})]
                      (fn [err evt]
                        (is (nil? err))
-                       (let [args (map-vals (:args evt) #(js-invoke % "toNumber"))]
-                         (swap! actual-events #(into % [[(:name (:contract evt)) (:event evt) args]]))))
+                       (let [args (map-vals (:args evt) #(js-invoke % "toNumber"))
+                             contract (:contract evt)]
+                         (swap! actual-events #(into % [[(:name contract) (:contract-key contract) (:event evt) args]]))))
                      {:on-finish (fn []
                                    (is (= expected-events @actual-events))
                                    (done))}))))))))
+
+
+(def forwarder-target-placeholder "beefbeefbeefbeefbeefbeefbeefbeefbeefbeef")
+
+
+(deftest test-forwarders
+  (testing "test-forwarders"
+
+    (async done
+      (-> (contracts/deploy-smart-contract! :my-contract [1])
+        (.then #(contracts/deploy-smart-contract! :my-contract-fwd [] {:placeholder-replacements
+                                                                       {forwarder-target-placeholder :my-contract}}))
+        (.then #(-> (contracts/contract-call :my-contract-fwd :target)
+                  (.then (fn [target] (is (= (contracts/contract-address :my-contract) target))))))
+
+        (.then #(contracts/contract-call [:my-contract :my-contract-fwd] :set-counter [24]))
+        (.then #(-> (contracts/contract-call [:my-contract :my-contract-fwd] :counter)
+                  (.then (fn [counter] (is (= 24 (.toNumber counter)))))))
+
+        ;; Direct way to use forwarders, assuming :forwards-to is defined in smart_contracts.cljs
+        (.then #(contracts/contract-call :my-contract-fwd :set-counter [28]))
+        (.then #(-> (contracts/contract-call :my-contract-fwd :counter)
+                  (.then (fn [counter] (is (= 28 (.toNumber counter)))))))
+
+        (.then #(contracts/contract-call :my-contract-fwd :set-target ["0xea674fdde714fd979de3edf0f56aa9716b898ec8"]
+                                         {:ignore-forward? true}))
+
+        (.then #(-> (contracts/contract-call :my-contract-fwd :target)
+                  (.then (fn [target] (is (= "0xea674fdde714fd979de3edf0f56aa9716b898ec8" target))))))
+
+
+        (.then #(contracts/contract-call :my-contract-fwd :set-target [(contracts/contract-address :my-contract)]
+                                         {:ignore-forward? true}))
+
+        (.then #(contracts/contract-call :my-contract-fwd :increment-counter [3]))
+
+        (.then #(contracts/create-event-filter :my-contract-fwd :on-counter-incremented {} {:from-block 0 :to-block "latest"}
+                                               (fn [err {:keys [:contract :event]}]
+                                                 (is (not err))
+                                                 (is (= (:contract-key contract) :my-contract-fwd))
+                                                 (is (= event :on-counter-incremented))
+                                                 (done))))))))
+
