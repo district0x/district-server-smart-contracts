@@ -346,7 +346,7 @@
                     (<! (timeout delay)))
                   (let [first-log (first logs)]
                     (when (fn? callback)
-                      (callback (:err first-log) (first logs))))
+                      (callback (:err first-log) (dissoc first-log :err))))
                   (recur (rest logs)))
 
                 (when (fn? on-finish)
