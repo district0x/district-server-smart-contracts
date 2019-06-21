@@ -7,7 +7,6 @@
             [cljs.nodejs :as nodejs]
             [cljs.pprint]
             [cljs.spec.alpha :as s]
-            [taoensso.timbre :as log]
             [clojure.string :as string]
             [district.shared.async-helpers :as asynch]
             [district.server.config :refer [config]]
