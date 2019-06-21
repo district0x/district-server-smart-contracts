@@ -11,7 +11,6 @@
             [district.shared.async-helpers :as asynch]
             [district.server.config :refer [config]]
             [district.server.web3 :refer [web3]]
-            [cljs.core.async :as async :refer [chan]]
             [mount.core :as mount :refer [defstate]])
   (:require-macros [cljs.core.async.macros :refer [go-loop]]))
 
