@@ -204,6 +204,9 @@ Opts you can pass:
 #### <a name="replay-past-events-in-order">`replay-past-events-in-order [event-filters callback opts]`
 Given a collection of filters get all past events from the filters, sorts them by :block-number :transaction-index :log-index and calls callback for each one in order.
 Event passed into callback contains `:contract` and `:event` keys, to easily identify the event.
+If callback function returns a JS/Promise it will block until executed.
+**NOTE** there is no built-in error handling, so the callback needs to handle promise rejections on it's own.
+
 Opts you can pass: 
 * `:delay` - To put delay in between callbacks in ms
 * `:transform-fn` - Function to transform collection of sorted events

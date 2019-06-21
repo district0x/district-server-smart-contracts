@@ -8,6 +8,7 @@
             [cljs.pprint]
             [cljs.spec.alpha :as s]
             [clojure.string :as string]
+            [district.shared.async-helpers :as asynch]
             [district.server.config :refer [config]]
             [district.server.web3 :refer [web3]]
             [mount.core :as mount :refer [defstate]])
@@ -334,9 +335,10 @@
       (if logs-ch
         (let [{:keys [:err :logs]} (async/<! logs-ch)
               logs (map #(assoc % :err err) logs)]
-          (recur (into all-logs logs) rest-logs))           ;; keep collecting
-        ;; no more channels to read, sort and callback
+          ;; keep collecting
+          (recur (into all-logs logs) rest-logs))
 
+        ;; no more channels to read, sort and callback
         (let [sorted-logs (transform-fn (sort-by (juxt :block-number :transaction-index :log-index) all-logs))]
           (go-loop [logs sorted-logs]
             (when (not @stopped?)
@@ -345,8 +347,12 @@
                   (when (pos? delay)
                     (<! (timeout delay)))
                   (let [first-log (first logs)]
+
                     (when (fn? callback)
-                      (callback (:err first-log) (dissoc first-log :err))))
+                      (doseq [res (callback (:err first-log) (dissoc first-log :err))]
+                        ;; if callback returns a promise we block until it resolves
+                        (when (asynch/promise? res)
+                          (<! (asynch/promise->chan res))))))
                   (recur (rest logs)))
 
                 (when (fn? on-finish)
