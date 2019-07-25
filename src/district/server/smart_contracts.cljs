@@ -85,6 +85,13 @@
 
 (defn load-contract-files [contract {:keys [:contracts-build-path]}]
   (let [{:keys [abi bin]} (fetch-contract (:name contract) {:path contracts-build-path})]
+
+    (when-not abi
+      (println "Couldn't find ABI for " (:name contract)))
+
+    (when-not bin
+      (println "Couldn't find bin for " (:name contract)))
+
     (merge contract
            {:abi abi
             :bin bin
