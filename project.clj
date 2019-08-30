@@ -1,4 +1,4 @@
-(defproject district0x/district-server-smart-contracts "1.0.16-SNAPSHOT"
+(defproject district0x/district-server-smart-contracts "1.0.17-SNAPSHOT"
   :description "district0x server module for handling smart-contracts"
   :url "https://github.com/district0x/district-server-smart-contracts"
   :license {:name "Eclipse Public License"
@@ -9,7 +9,7 @@
                  [district0x/district-server-web3 "1.0.1"]
                  [mount "0.1.11"]
                  [org.clojure/core.match "0.3.0-alpha4"]
-                 [org.clojure/clojurescript "1.9.946"]]
+                 [org.clojure/clojurescript "1.10.520"]]
 
   :plugins [[lein-npm "0.6.2"]
             [lein-doo "0.1.8"]

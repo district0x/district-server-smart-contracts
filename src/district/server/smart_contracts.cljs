@@ -11,7 +11,8 @@
             [district.shared.async-helpers :as asynch]
             [district.server.config :refer [config]]
             [district.server.web3 :refer [web3]]
-            [mount.core :as mount :refer [defstate]])
+            [mount.core :as mount :refer [defstate]]
+            [cljs.core.async.impl.protocols])
   (:require-macros [cljs.core.async.macros :refer [go-loop]]))
 
 (def fs (nodejs/require "fs"))
@@ -357,9 +358,10 @@
 
                     (when (fn? callback)
                       (doseq [res (callback (:err first-log) (dissoc first-log :err))]
-                        ;; if callback returns a promise we block until it resolves
-                        (when (asynch/promise? res)
-                          (<! (asynch/promise->chan res))))))
+                        ;; if callback returns a promise or chan we block until it resolves
+                        (cond
+                          (satisfies? cljs.core.async.impl.protocols/ReadPort res) (<! res)
+                          (asynch/promise? res)                                    (<! (asynch/promise->chan res))))))
                   (recur (rest logs)))
 
                 (when (fn? on-finish)
