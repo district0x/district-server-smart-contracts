@@ -1,22 +1,23 @@
-(defproject district0x/district-server-smart-contracts "1.0.17-SNAPSHOT"
+(defproject district0x/district-server-smart-contracts "1.1.0-SNAPSHOT"
   :description "district0x server module for handling smart-contracts"
   :url "https://github.com/district0x/district-server-smart-contracts"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [
-                 [cljs-web3 "0.19.0-0-8"]
-                 [district0x/async-helpers "0.1.1"]
+                 [cljs-web3-next "0.0.15"]
+                 [com.taoensso/timbre "4.10.0"]
+                 [district0x/async-helpers "0.1.3"]
                  [district0x/district-server-config "1.0.1"]
-                 [district0x/district-server-web3 "1.0.1"]
-                 [mount "0.1.11"]
+                 [district0x/district-server-web3 "1.1.3"]
+                 [mount "0.1.16"]
                  [org.clojure/clojurescript "1.10.520"]
-                 [org.clojure/core.match "0.3.0-alpha4"]
                  ]
 
   :plugins [[lein-npm "0.6.2"]
             [lein-doo "0.1.8"]]
 
-  :npm {:devDependencies [[jsedn "0.4.1"]
+  :npm {:dependencies [[web3 "1.2.0"]]
+        :devDependencies [[jsedn "0.4.1"]
                           [ws "2.0.1"]]}
 
   ;; :source-paths ["src"]
@@ -24,7 +25,8 @@
   :clean-targets ^{:protect false} ["target" "tests-compiled"]
 
   :profiles {:dev {:dependencies [[lein-doo "0.1.8"]
-                                  [org.clojure/clojure "1.10.1"]]
+                                  [org.clojure/clojure "1.10.1"]
+                                  [org.clojure/core.async "0.4.500"]]
                    :source-paths ["test" "src"]
                    :resource-paths ["resources"]}}
 
