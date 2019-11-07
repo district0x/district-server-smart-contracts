@@ -15,9 +15,6 @@
 
 (async-helpers/extend-promises-as-channels!)
 
-(defn- map-vals [m f]
-  (into {} (for [[k v] m] [k (f v)])))
-
 (use-fixtures
   :each
   {:before (fn []
@@ -67,24 +64,20 @@
                  forwarder-target (<! (smart-contracts/contract-call :my-contract-fwd :target))
                  set-counter-tx (<! (smart-contracts/contract-send [:my-contract :my-contract-fwd] :set-counter [24] {:gas 500000}))
                  counter24 (<! (smart-contracts/contract-call [:my-contract :my-contract-fwd] :counter))
-                 ;; Direct way to use forwarders, assuming :forwards-to is defined in smart_contracts.cljs
 
-                 ;; TODO
-                 ;; forwarder-event-emitter (smart-contracts/subscribe-events [:my-contract
-                 ;;                                                            :my-contract-fwd]
-                 ;;                                                           :onCounterIncremented
-                 ;;                                                           {:from-block 0 ;;(<! (web3-eth/get-block-number @web3))
-                 ;;                                                            :to-block "latest"}
-                 ;;                                                           [(fn [error {:keys [:args :event] :as tx}]
-                 ;;                                                              (log/debug "@@@ forwarder" event))])
+                 ;; Direct way to use forwarders, assuming :forwards-to is defined in smart_contracts.cljs
+                 forwarder-event-emitter (smart-contracts/subscribe-events :my-contract-fwd
+                                                                           :onCounterIncremented
+                                                                           {:from-block (<! (web3-eth/get-block-number @web3))
+                                                                            :to-block "latest"}
+                                                                           [(fn [error {:keys [:args :event] :as tx}]
+                                                                              (log/debug "forwarder event" event))])
 
 
                  set-counter-tx (<! (smart-contracts/contract-send :my-contract-fwd :set-counter [28] {:gas 500000}))
-                 counter28 (<! (smart-contracts/contract-call :my-contract-fwd :counter))
-
-
-                 cleanup-tx (<! (smart-contracts/contract-send :my-contract :set-counter [1] {:gas 5000000}))
-                 ]
+                 increment-counter-tx (<! (smart-contracts/contract-send :my-contract-fwd :increment-counter [1] {:gas 5000000}))
+                 counter29 (<! (smart-contracts/contract-call :my-contract-fwd :counter))
+                 cleanup-tx (<! (smart-contracts/contract-send :my-contract :set-counter [1] {:gas 5000000}))]
 
              (is (true? connected?))
 
@@ -100,36 +93,6 @@
              (is (= "0xbeefbeefbeefbeefbeefbeefbeefbeefbeefbeef" (string/lower-case target)))
              (is (= my-contract-address (string/lower-case forwarder-target)))
              (is (= "24" counter24))
-             (is (= "28" counter28))
-
+             (is (= "29" counter29))
 
              (done)))))
-
-#_(deftest test-forwarders
-    (testing "test-forwarders"
-      (async done
-             (->
-
-                 ;; Direct way to use forwarders, assuming :forwards-to is defined in smart_contracts.cljs
-                 (.then #(contracts/contract-call :my-contract-fwd :set-counter [28]))
-
-                 (.then #(-> (contracts/contract-call :my-contract-fwd :counter)
-                             (.then (fn [counter] (is (= 28 (.toNumber counter)))))))
-
-                 (.then #(contracts/contract-call :my-contract-fwd :set-target ["0xea674fdde714fd979de3edf0f56aa9716b898ec8"]
-                                                  {:ignore-forward? true}))
-
-                 (.then #(-> (contracts/contract-call :my-contract-fwd :target)
-                             (.then (fn [target] (is (= "0xea674fdde714fd979de3edf0f56aa9716b898ec8" target))))))
-
-                 (.then #(contracts/contract-call :my-contract-fwd :set-target [(contracts/contract-address :my-contract)]
-                                                  {:ignore-forward? true}))
-
-                 (.then #(contracts/contract-call :my-contract-fwd :increment-counter [3]))
-
-                 (.then #(contracts/create-event-filter :my-contract-fwd :on-counter-incremented {} {:from-block 0 :to-block "latest"}
-                                                        (fn [err {:keys [:contract :event]}]
-                                                          (is (not err))
-                                                          (is (= (:contract-key contract) :my-contract-fwd))
-                                                          (is (= event :on-counter-incremented))
-                                                          (done))))))))
