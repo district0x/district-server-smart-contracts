@@ -1,6 +1,6 @@
 # district-server-smart-contracts
 
-[![Build Status](https://travis-ci.org/district0x/district-server-smart-contracts.svg?branch=master)](https://travis-ci.org/district0x/district-server-smart-contracts)
+[![CircleCI](https://circleci.com/gh/district0x/district-server-smart-contracts.svg?style=svg)](https://circleci.com/gh/district0x/district-server-smart-contracts)
 
 Clojurescript-node.js [mount](https://github.com/tolitius/mount) module for a district server, that takes care of smart-contracts loading, deployment, function calling and event handling.
 
