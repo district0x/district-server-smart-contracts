@@ -1,7 +1,7 @@
 (ns district.server.smart-contracts
-  (:require [cljs-web3.core :as web3-core]
-            [cljs-web3.eth :as web3-eth]
-            [cljs-web3.helpers :as web3-helpers]
+  (:require [cljs-web3-next.core :as web3-core]
+            [cljs-web3-next.eth :as web3-eth]
+            [cljs-web3-next.helpers :as web3-helpers]
             [cljs.core.async :refer [<! timeout] :as async]
             [cljs.core.async.impl.protocols]
             [cljs.nodejs :as nodejs]

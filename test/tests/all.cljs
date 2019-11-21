@@ -1,17 +1,15 @@
 (ns tests.all
-  (:require
-   [cljs-web3.eth :as web3-eth]
-   [cljs.core.async :refer [<!] :as async]
-   [cljs-web3.core :as web3-core]
-   [cljs.test :refer-macros [deftest use-fixtures is testing async]]
-   [clojure.string :as string]
-   [district.server.smart-contracts :as smart-contracts]
-   [district.server.web3 :refer [web3]]
-   [mount.core :as mount]
-   [taoensso.timbre :as log]
-   [tests.smart-contracts-test]
-   [district.shared.async-helpers :as async-helpers])
-  (:require-macros [cljs.core.async.macros :refer [go]]))
+  (:require [cljs-web3-next.eth :as web3-eth]
+            [cljs.core.async :refer [go <!] :as async]
+            [cljs-web3-next.core :as web3-core]
+            [cljs.test :refer-macros [deftest use-fixtures is testing async]]
+            [clojure.string :as string]
+            [district.server.smart-contracts :as smart-contracts]
+            [district.server.web3 :refer [web3]]
+            [mount.core :as mount]
+            [taoensso.timbre :as log]
+            [tests.smart-contracts-test]
+            [district.shared.async-helpers :as async-helpers]))
 
 (async-helpers/extend-promises-as-channels!)
 
