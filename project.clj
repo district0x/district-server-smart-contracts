@@ -1,4 +1,4 @@
-(defproject district0x/district-server-smart-contracts "1.1.0-SNAPSHOT"
+(defproject district0x/district-server-smart-contracts "1.2.0-SNAPSHOT"
   :description "district0x server module for handling smart-contracts"
   :url "https://github.com/district0x/district-server-smart-contracts"
   :license {:name "Eclipse Public License"
