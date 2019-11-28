@@ -206,6 +206,17 @@
                            nil
                            logs))))))
 
+(defn wait-for-block
+  "Blocks until block with block-number arrives.
+   callback is a nodejs style callback i.e. (fn [error data] ...)"
+  [block-number callback]
+  (web3-eth/get-block @web3 block-number (fn [error response]
+                                           (if error
+                                             (callback error nil)
+                                             (if response
+                                               (callback nil response)
+                                               (js/setTimeout #(wait-for-block block-number callback) 1000))))))
+
 (defn replay-past-events-in-order [events callback {:keys [:from-block :to-block
                                                            :ignore-forward? :delay
                                                            :transform-fn :on-finish]

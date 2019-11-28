@@ -24,7 +24,7 @@ Include `[district.server.smart-contracts]` in your CLJS file, where you use `mo
   - [create-event-filter](#create-event-filter)
   - [deploy-smart-contract!](#deploy-smart-contract!)
   - [write-smart-contracts!](#write-smart-contracts!)
-  - [wait-for-tx-receipt](#wait-for-tx-receipt)
+  - [wait-for-block](#wait-for-block)
   - [contract-event-in-tx](#contract-event-in-tx)
   - [contract-events-in-tx](#contract-events-in-tx)
   - [replay-past-events](#replay-past-events)
@@ -123,8 +123,8 @@ Convenient wrapper around [cljs-web3](https://github.com/district0x/cljs-web3) c
 *Note* : This function needs an unlocked account for signing the transaction! <br>
 * `contract` can be one of:
   * keyword (e.g `:my-contract`)
-  * keyword of forwarder (e.g `my-contract-fwd`): If you defined `:forwards-to` in your smart-contracts definition, you can just use the key of 
-  forwarder and it'll know, that it should use ABI of contract in `:forwards-to`. 
+  * keyword of forwarder (e.g `my-contract-fwd`): If you defined `:forwards-to` in your smart-contracts definition, you can just use the key of
+  forwarder and it'll know, that it should use ABI of contract in `:forwards-to`.
   * tuple: keyword + address, for contract at specific address (e.g `[:my-contract "0x575262e80edf7d4b39d95422f86195eb4c21bb52"]`)
   * tuple: keyword + keyword, to use ABI from first contract and address from second contract   (e.g `[:my-contract :my-other-contract]`)
 * `method` : keyword for the method name e.g. `:my-method`
@@ -172,8 +172,8 @@ Returns a Promise which resolves to the contracts address.
 #### <a name="write-smart-contracts!">`write-smart-contracts! []`
 Writes smart-contracts that are currently in module's state into file that was passed to `:contracts-var`.
 
-#### <a name="wait-for-tx-receipt">`wait-for-tx-receipt [tx-hash]`
-Function blocks until transaction is transmitted to the network, returns a Promise which resolves to the receipt.
+#### <a name="wait-for-block">`wait-for-block [block-number callback]`
+Function blocks until block with the specified number is mined. Takes a nodejs-style callback as a second parameter.
 
 #### <a name="contract-event-in-tx">`contract-event-in-tx [tx-hash contract-key event-name & args]`
 Will return first contract event with name `event-name` that occured during execution of transaction with hash `tx-hash`. This is useful, when you look for data in specific event after doing some transaction. For example in tests, or mock data generating. Advantage is that this function is synchronous, compared to setting up event filter with web3.
@@ -190,7 +190,7 @@ The same as `contract-event-in-tx` but instead of first event, returns collectio
 #### <a name="replay-past-events">`replay-past-events [event-filter callback opts]`
 Reruns all past events and calls callback for each one. This is similiar to what you do with normal web3 event filter, but with this one you can slow down rate at which callbacks are fired.
 Helps in case you have large number of events with slow callbacks, to prevent unresponsive app.
-Opts you can pass: 
+Opts you can pass:
 * `:delay` - To put delay in between callbacks in ms
 * `:transform-fn` - Function to transform collection of events
 * `:on-finish` - Will be called after calling callback for all events
@@ -207,7 +207,7 @@ Event passed into callback contains `:contract` and `:event` keys, to easily ide
 If callback function returns a JS/Promise it will block until executed.
 **NOTE** there is no built-in error handling, so the callback needs to handle promise rejections on it's own.
 
-Opts you can pass: 
+Opts you can pass:
 * `:delay` - To put delay in between callbacks in ms
 * `:transform-fn` - Function to transform collection of sorted events
 * `:on-finish` - Will be called after calling callback for all events
