@@ -199,12 +199,11 @@
     (promise-> (web3-eth/get-transaction-receipt @web3 transaction-hash)
                (fn [tx-receipt]
                  (let [{:keys [:logs :inputs]} (web3-helpers/js->cljkk tx-receipt)]
-                   (reduce (fn [result {:keys [:topics :data] :as log}]
-                             (when (= signature (first topics))
-                               (let [return-values (web3-eth/decode-log @web3 (:inputs event-interface) data topics)]
-                                 (web3-helpers/return-values->clj return-values event-interface))))
-                           nil
-                           logs))))))
+                   (some (fn [{:keys [:topics :data] :as log}]
+                           (when (= signature (first topics))
+                             (let [return-values (web3-eth/decode-log @web3 (:inputs event-interface) data topics)]
+                               (web3-helpers/return-values->clj return-values event-interface))))
+                    logs))))))
 
 (defn wait-for-block
   "Blocks until block with block-number arrives.
