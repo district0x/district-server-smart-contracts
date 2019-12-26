@@ -216,12 +216,21 @@
                                                (callback nil response)
                                                (js/setTimeout #(wait-for-block block-number callback) 1000))))))
 
-(defn replay-past-events-in-order [events callback {:keys [:from-block :to-block
-                                                           :ignore-forward? :delay
-                                                           :transform-fn :on-finish]
-                                                    :or {delay 0 transform-fn identity}
-                                                    :as opts}]
-  (let [logs-chans (for [[k [contract event]] events]
+(defn replay-past-events-in-order
+  "Replay all past events in order.
+  :from-block specifies the first block number events should be dispatched.
+  :skip-log-indexes, a set of tuples like [tx log-index] for the :from-block block that should be skipped."
+  [events callback {:keys [:from-block :skip-log-indexes :to-block
+                           :ignore-forward?
+                           :transform-fn :on-finish]
+                    :or {transform-fn identity}
+                    :as opts}]
+
+  (when (and skip-log-indexes (not from-block ))
+    (throw (js/Error. "replay-past-events-in-order: Can't specify skip-log-indexes without specifying :from-block")))
+
+  (let [log-order-triplet (juxt :block-number :transaction-index :log-index)
+        logs-chans (for [[k [contract event]] events]
                      (let [logs-ch (async/promise-chan)
                            contract-instance (instance-from-arg contract {:ignore-forward? ignore-forward?})]
                        (web3-eth/get-past-events contract-instance
@@ -244,12 +253,15 @@
           (recur (into all-logs logs) rest-logs))
 
         ;; no more channels to read, sort and callback
-        (let [sorted-logs (transform-fn (sort-by (juxt :block-number :transaction-index :log-index) all-logs))]
+        (let [sorted-logs (cond->> (sort-by log-order-triplet all-logs)
+
+                            skip-log-indexes (remove (fn [l]
+                                                       (and (= (:block-number l) from-block)
+                                                            (skip-log-indexes [(:transaction-index l) (:log-index l)]))))
+                            true             transform-fn)]
           (go-loop [logs sorted-logs]
             (if (seq logs)
               (do
-                (when (pos? delay)
-                  (<! (timeout delay)))
                 (let [first-log (first logs)]
 
                   (when (fn? callback)

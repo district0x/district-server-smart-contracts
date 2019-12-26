@@ -208,9 +208,10 @@ If callback function returns a JS/Promise it will block until executed.
 **NOTE** there is no built-in error handling, so the callback needs to handle promise rejections on it's own.
 
 Opts you can pass:
-* `:delay` - To put delay in between callbacks in ms
 * `:transform-fn` - Function to transform collection of sorted events
 * `:on-finish` - Will be called after calling callback for all events
+* `:from-block` - Only download and replay past events starting from this block
+* `:skip-log-indexes` - A set of tuples like [tx log-index]. Logs in `:from-block` block with this [tx log-index] will be skipped
 
 
 ```clojure
