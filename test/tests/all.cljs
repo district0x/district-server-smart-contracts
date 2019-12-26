@@ -14,7 +14,7 @@
 (async-helpers/extend-promises-as-channels!)
 
 (use-fixtures
-  :each
+  :once
   {:before (fn []
              (-> (mount/with-args
                    {:web3 {:url "ws://127.0.0.1:8545"}
@@ -89,8 +89,31 @@
              (is (= "5" five))
 
              (is (= "0xbeefbeefbeefbeefbeefbeefbeefbeefbeefbeef" (string/lower-case target)))
-             (is (= my-contract-address (string/lower-case forwarder-target)))
+             (is (= (string/lower-case my-contract-address) (string/lower-case forwarder-target)))
              (is (= "24" counter24))
              (is (= "29" counter29))
+             (.unsubscribe event-emitter (fn []))
+             (done)))))
+
+(deftest test-replay-past-events-in-order
+  (async done
+         (go
+           (let [events {:my-contract/on-counter-incremented [:my-contract :onCounterIncremented]}
+                 my-contract-address (smart-contracts/contract-address :my-contract)
+                 connected? (<! (web3-eth/is-listening? @web3))
+                 block-number (<! (web3-eth/get-block-number @web3))
+                 captured-events (atom [])
+                 _ (<! (smart-contracts/contract-send :my-contract :double-increment-counter [1] {:gas 5000000}))
+                 _ (<! (smart-contracts/contract-send :my-contract :double-increment-counter [1] {:gas 5000000}))
+                 past-events (<! (smart-contracts/replay-past-events-in-order events (fn [error {:keys [:args :event] :as e}]
+                                                                                       (swap! captured-events conj ((juxt :block-number :transaction-index :log-index) e)))
+                                                                              {:from-block (inc block-number)
+                                                                               :skip-log-indexes #{[0 0]}
+                                                                               :to-block "latest"
+                                                                               :on-finish (fn []
+                                                                                            (log/debug "Finished replaying past events"))}))]
+
+             (is (= @captured-events [[(+ block-number 1) 0 1] [(+ block-number 2) 0 0] [(+ block-number 2) 0 1]])
+                 "It should filter by from-block and from-tx-lidx")
 
              (done)))))
