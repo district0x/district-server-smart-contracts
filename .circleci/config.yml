@@ -7,7 +7,7 @@ jobs:
       # Primary container image where all steps run.
       - image: district0x/cljs-dev
       # Secondary container image on common network.
-      - image: trufflesuite/ganache-cli:latest
+      - image: trufflesuite/ganache-cli:v6.7.0
         command: [-d, -m district0x, -p 8545, -l 8000000]
     steps:
       - checkout
