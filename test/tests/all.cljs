@@ -42,19 +42,20 @@
                  five (<! (smart-contracts/contract-call :my-contract :my-plus [2 3]))
                  increment-counter-tx (<! (smart-contracts/contract-send :my-contract :increment-counter [1] {:gas 5000000}))
                  special-event-tx (<! (smart-contracts/contract-send :my-contract :fire-special-event [2] {:gas 500000}))
-                 past-events (<! (smart-contracts/replay-past-events-in-order events (fn [error {:keys [:args :event]}]
-                                                                                       (case event
-                                                                                         :on-counter-incremented
-                                                                                         (is (= "2" (:the-counter args)))
+                 _ (<! (smart-contracts/replay-past-events-in-order events (fn [error {:keys [:args :event]}]
+                                                                             (case event
+                                                                               :on-counter-incremented
+                                                                               (is (= "2" (:the-counter args)))
 
-                                                                                         :on-special-event
-                                                                                         (is (= "2" (:some-param args))))
+                                                                               :on-special-event
+                                                                               (is (= "2" (:some-param args))))
 
-                                                                                       (log/debug "replaying past event" event))
-                                                                              {:from-block (inc block-number)
-                                                                               :to-block "latest"
-                                                                               :on-finish (fn []
-                                                                                            (log/debug "Finished replaying past events"))}))
+                                                                             (log/debug "replaying past event" event))
+                                                                    {:from-block block-number
+                                                                     :to-block (+ block-number 2)
+                                                                     :block-step 1
+                                                                     :on-finish (fn []
+                                                                                  (log/debug "Finished replaying past events"))}))
                  ;; forwarder tests
                  target (<! (smart-contracts/contract-call :my-contract :target))
                  set-target-tx (<! (smart-contracts/contract-send :my-contract-fwd :set-target [my-contract-address] {:ignore-forward? true
@@ -108,10 +109,12 @@
                  past-events (<! (smart-contracts/replay-past-events-in-order events (fn [error {:keys [:args :event] :as e}]
                                                                                        (swap! captured-events conj ((juxt :block-number :transaction-index :log-index) e)))
                                                                               {:from-block (inc block-number)
+                                                                               :to-block (<! (web3-eth/get-block-number @web3))
                                                                                :skip-log-indexes #{[0 0]}
-                                                                               :to-block "latest"
+                                                                               :block-step 1
                                                                                :on-finish (fn []
-                                                                                            (log/debug "Finished replaying past events"))}))]
+                                                                                            (log/debug "Finished replaying past events"))}))
+                 cleanup-tx (<! (smart-contracts/contract-send :my-contract :set-counter [1] {:gas 5000000}))]
 
              (is (= @captured-events [[(+ block-number 1) 0 1] [(+ block-number 2) 0 0] [(+ block-number 2) 0 1]])
                  "It should filter by from-block and from-tx-lidx")

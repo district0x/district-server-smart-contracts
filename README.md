@@ -211,6 +211,8 @@ Opts you can pass:
 * `:transform-fn` - Function to transform collection of sorted events
 * `:on-finish` - Will be called after calling callback for all events
 * `:from-block` - Only download and replay past events starting from this block
+* `:to-block` - Only download and replay past to this block
+* `:block-step` - Blocks numbered `:from-block` until `:to-block` will be requested in equal chunks of size block-step to avoid sending too big of a request to the node.
 * `:skip-log-indexes` - A set of tuples like [tx log-index]. Logs in `:from-block` block with this [tx log-index] will be skipped
 
 

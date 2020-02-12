@@ -220,7 +220,7 @@
   "Replay all past events in order.
   :from-block specifies the first block number events should be dispatched.
   :skip-log-indexes, a set of tuples like [tx log-index] for the :from-block block that should be skipped."
-  [events callback {:keys [:from-block :skip-log-indexes :to-block
+  [events callback {:keys [:from-block :skip-log-indexes :to-block :block-step
                            :ignore-forward?
                            :transform-fn :on-finish]
                     :or {transform-fn identity}
@@ -230,12 +230,24 @@
     (throw (js/Error. "replay-past-events-in-order: Can't specify skip-log-indexes without specifying :from-block")))
 
   (let [log-order-triplet (juxt :block-number :transaction-index :log-index)
-        logs-chans (for [[k [contract event]] events]
+        from-blocks (range from-block to-block block-step)
+        last-from (last from-blocks)
+        from-blocks (concat from-blocks [(+ block-step last-from)])
+        logs-chans (for [[k [contract event]] events
+                         from from-blocks]
                      (let [logs-ch (async/promise-chan)
-                           contract-instance (instance-from-arg contract {:ignore-forward? ignore-forward?})]
+                           contract-instance (instance-from-arg contract {:ignore-forward? ignore-forward?})
+                           to (min to-block (+ from (dec block-step)))]
+
+                       (log/debug "Processing chunk of blocks" {:contract contract
+                                                                :event event
+                                                                :from from
+                                                                :to to})
+
                        (web3-eth/get-past-events contract-instance
                                                  event
-                                                 opts
+                                                 {:from-block from
+                                                  :to-block to}
                                                  (fn [error events]
                                                    (let [logs (->> events
                                                                    web3-helpers/js->cljkk
