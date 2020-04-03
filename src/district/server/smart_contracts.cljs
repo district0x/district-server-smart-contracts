@@ -221,7 +221,7 @@
   :from-block specifies the first block number events should be dispatched.
   :skip-log-indexes, a set of tuples like [tx log-index] for the :from-block block that should be skipped."
   [events callback {:keys [:from-block :skip-log-indexes :to-block :block-step
-                           :ignore-forward?
+                           :ignore-forward? :crash-on-event-fail?
                            :transform-fn :on-finish]
                     :or {transform-fn identity}
                     :as opts}]
@@ -277,7 +277,12 @@
                 (let [first-log (first logs)]
 
                   (when (fn? callback)
-                    (doseq [res (callback (:err first-log) (dissoc first-log :err))]
+                    (doseq [res (try
+                                  (callback (:err first-log) (dissoc first-log :err))
+                                  (catch js/Error e
+                                    (when crash-on-event-fail?
+                                      (log/error "Server crash. Caused by event processing error with :crash-on-event-fail? true. Disable this flag to skip and continue.")
+                                      (.exit js/process 1))))]
                       ;; if callback returns a promise or chan we block until it resolves
                       (cond
                         (satisfies? cljs.core.async.impl.protocols/ReadPort res)
