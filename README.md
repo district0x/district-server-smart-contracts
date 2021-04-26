@@ -228,14 +228,11 @@ Opts you can pass:
 
 ## Development
 ```bash
-# To start REPL and run tests
+# Setup
 lein deps
-lein repl
-(start-tests!)
+docker run --name=ganache -p 8545:8545 trufflesuite/ganache-cli:v6.12.1 -p 8545
 
-# In other terminal
-node tests-compiled/run-tests.js
-
-# To run tests without REPL
-lein doo node "tests" once
+# To run tests
+truffle migrate --network ganache --reset
+lein doo node "nodejs-tests" once
 ```

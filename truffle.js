@@ -13,5 +13,10 @@ module.exports = {
       gasPrice: 20e9, // 20 gwei, default for ganache
       network_id: '*'
     }
-  }
+  },
+  compilers: {
+      solc: {
+        version: "0.4.24",
+      }
+    }
 };
