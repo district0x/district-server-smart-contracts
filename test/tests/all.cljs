@@ -17,7 +17,9 @@
   :once
   {:before (fn []
              (-> (mount/with-args
-                   {:web3 {:url "ws://127.0.0.1:8545"}
+                   {:web3 {:url "ws://127.0.0.1:8545",
+                           :on-online #(log/debug "Ethereum node went online")
+                           :on-offline #(log/debug "Ethereum node went offline")}
                     :smart-contracts {:contracts-var #'tests.smart-contracts-test/smart-contracts}})
                  (mount/start)))
    :after (fn []
@@ -41,14 +43,15 @@
                  one (<! (smart-contracts/contract-call :my-contract :counter))
                  five (<! (smart-contracts/contract-call :my-contract :my-plus [2 3]))
                  increment-counter-tx (<! (smart-contracts/contract-send :my-contract :increment-counter [1] {:gas 5000000}))
-                 special-event-tx (<! (smart-contracts/contract-send :my-contract :fire-special-event [2] {:gas 500000}))
+                 special-event-tx (<! (smart-contracts/contract-send :my-contract :fire-special-event [2 3 4 5] {:gas 500000}))
+                 decoded-special-event (<! (smart-contracts/contract-event-in-tx :my-contract :on-special-event special-event-tx))
                  _ (<! (smart-contracts/replay-past-events-in-order events (fn [error {:keys [:args :event]}]
                                                                              (case event
                                                                                :on-counter-incremented
                                                                                (is (= "2" (:the-counter args)))
 
                                                                                :on-special-event
-                                                                               (is (= "2" (:some-param args))))
+                                                                               (is (= "2" (:param-1 args))))
 
                                                                              (log/debug "replaying past event" event))
                                                                     {:from-block block-number
@@ -88,6 +91,8 @@
 
              (is (= "1" one))
              (is (= "5" five))
+
+             (is (= {:param-1 "2" :param-2 "3" :param-3 "4" :param-4 "5"} decoded-special-event))
 
              (is (= "0xbeefbeefbeefbeefbeefbeefbeefbeefbeefbeef" (string/lower-case target)))
              (is (= (string/lower-case my-contract-address) (string/lower-case forwarder-target)))

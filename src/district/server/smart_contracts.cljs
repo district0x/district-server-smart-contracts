@@ -201,7 +201,7 @@
                  (let [{:keys [:logs :inputs]} (web3-helpers/js->cljkk tx-receipt)]
                    (some (fn [{:keys [:topics :data] :as log}]
                            (when (= signature (first topics))
-                             (let [return-values (web3-eth/decode-log @web3 (:inputs event-interface) data topics)]
+                             (let [return-values (web3-eth/decode-log @web3 (:inputs event-interface) data (drop 1 topics))]
                                (web3-helpers/return-values->clj return-values event-interface))))
                     logs))))))
 
