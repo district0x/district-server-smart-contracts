@@ -21,7 +21,7 @@ Include `[district.server.smart-contracts]` in your CLJS file, where you use `mo
   - [contract-bin](#contract-bin)
   - [instance](#instance)
   - [contract-call](#contract-call)
-  - [create-event-filter](#create-event-filter)
+  - [subscribe-events](#subscribe-events)
   - [deploy-smart-contract!](#deploy-smart-contract!)
   - [write-smart-contracts!](#write-smart-contracts!)
   - [wait-for-block](#wait-for-block)
@@ -136,8 +136,9 @@ Convenient wrapper around [cljs-web3](https://github.com/district0x/cljs-web3) c
 
 Returns a Promise which resolves to the transaction-hash in the case of state-altering transactions or response in case of retrieve transactions.
 
-#### <a name="create-event-filter">`create-event-filter [contract event filter-opts opts on-event]`
-Installs an event filter. <br>
+#### <a name="subscribe-events">`subscribe-events [contract event opts on-event]`
+Given an event topics and block to start from, returns `EventEmitter` and calls
+`on-event` callback with each event <br>
 <br>
 * `contract` can be one of:
   * keyword (e.g `:my-contract`)
@@ -197,7 +198,7 @@ Opts you can pass:
 
 
 ```clojure
-(-> (contracts/create-event-filter :my-contract :on-some-event {} {:from-block 0})
+(-> (contracts/subscribe-events :my-contract :on-some-event {} {:from-block 0})
   (replay-past-events on-some-event {:delay 10})) ;; in ms
 ```
 
@@ -218,8 +219,8 @@ Opts you can pass:
 
 ```clojure
 (contracts/replay-past-events-in-order
-   [(contracts/create-event-filter :my-contract :on-special-event {} {:from-block 0 :to-block "latest"})
-    (contracts/create-event-filter :my-contract :on-counter-incremented {} {:from-block 0 :to-block "latest"})]
+   [(contracts/subscribe-events :my-contract :on-special-event {} {:from-block 0 :to-block "latest"})
+    (contracts/subscribe-events :my-contract :on-counter-incremented {} {:from-block 0 :to-block "latest"})]
    (fn [err evt]
     (println "Contract: " (:name (:contract evt)) ", event: " (:event evt) ", args: " (:args evt)))
    {:on-finish (fn []
