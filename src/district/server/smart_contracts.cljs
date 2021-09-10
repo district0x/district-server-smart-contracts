@@ -13,7 +13,7 @@
             [district.shared.async-helpers :refer [promise->]]
             [mount.core :as mount :refer [defstate]]
             [taoensso.timbre :as log])
-  (:require-macros [cljs.core.async.macros :refer [go-loop]]))
+  (:require-macros [cljs.core.async.macros :refer [go-loop go]]))
 
 (def fs (nodejs/require "fs"))
 (def process (nodejs/require "process"))
@@ -192,18 +192,28 @@
                                     opts)
                              (fn [error event]
                                (callback error (web3-helpers/js->cljkk event))))))
+(defn- get-events-from-tx
+  "Returns a promise that will resolve to the list of requested event data, decoded"
+  [contract event {:keys [:transaction-hash] :as tx-receipt} getter-fn]
+  (go
+    (let [contract-instance (instance-from-arg contract)
+          {:keys [:signature] :as event-interface} (web3-helpers/event-interface contract-instance event)
+          new-tx-receipt (<! (web3-eth/get-transaction-receipt @web3 transaction-hash))
+          {:keys [:logs :inputs]} (web3-helpers/js->cljkk new-tx-receipt)
+          sought-event? (fn [{:keys [:topics]}] (= signature (first topics)))
+          decode-event-data (fn [{:keys [:data :topics]}] (web3-eth/decode-log @web3 (:inputs event-interface) data (drop 1 topics)))
+          clojurize (fn [return-values] (web3-helpers/return-values->clj return-values event-interface))]
+      (->> logs
+           (filter sought-event? ,,,)
+           (map decode-event-data ,,,)
+           (map clojurize ,,,)
+           getter-fn ,,,))))
 
-(defn contract-event-in-tx [contract event {:keys [:transaction-hash] :as tx-receipt}]
-  (let [contract-instance (instance-from-arg contract)
-        {:keys [:signature] :as event-interface} (web3-helpers/event-interface contract-instance event)]
-    (promise-> (web3-eth/get-transaction-receipt @web3 transaction-hash)
-               (fn [tx-receipt]
-                 (let [{:keys [:logs :inputs]} (web3-helpers/js->cljkk tx-receipt)]
-                   (some (fn [{:keys [:topics :data] :as log}]
-                           (when (= signature (first topics))
-                             (let [return-values (web3-eth/decode-log @web3 (:inputs event-interface) data (drop 1 topics))]
-                               (web3-helpers/return-values->clj return-values event-interface))))
-                    logs))))))
+(defn contract-events-in-tx [contract event tx-receipt]
+  (get-events-from-tx contract event tx-receipt identity))
+
+(defn contract-event-in-tx [contract event tx-receipt]
+  (get-events-from-tx contract event tx-receipt first))
 
 (defn wait-for-block
   "Blocks until block with block-number arrives.

@@ -33,4 +33,9 @@ contract MyContract {
   function fireSpecialEvent(uint param1, uint param2, uint param3, uint param4) {
     onSpecialEvent(param1, param2, param3, param4);
   }
+
+  function fireSpecialEventTwice(uint param1, uint param2, uint param3, uint param4) {
+    onSpecialEvent(param1, param2, param3, param4);
+    onSpecialEvent(param4, param3, param2, param1);
+  }
 }

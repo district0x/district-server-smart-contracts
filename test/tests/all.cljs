@@ -45,6 +45,10 @@
                  increment-counter-tx (<! (smart-contracts/contract-send :my-contract :increment-counter [1] {:gas 5000000}))
                  special-event-tx (<! (smart-contracts/contract-send :my-contract :fire-special-event [2 3 4 5] {:gas 500000}))
                  decoded-special-event (<! (smart-contracts/contract-event-in-tx :my-contract :on-special-event special-event-tx))
+
+                 special-event-tx-twice (<! (smart-contracts/contract-send :my-contract :fire-special-event-twice [2 3 4 5] {:gas 500000}))
+                 decoded-special-events-all (<! (smart-contracts/contract-events-in-tx :my-contract :on-special-event special-event-tx-twice))
+                 ; decoded-special-events-all {}
                  _ (<! (smart-contracts/replay-past-events-in-order events (fn [error {:keys [:args :event]}]
                                                                              (case event
                                                                                :on-counter-incremented
@@ -93,6 +97,9 @@
              (is (= "5" five))
 
              (is (= {:param-1 "2" :param-2 "3" :param-3 "4" :param-4 "5"} decoded-special-event))
+
+             (is (= {:param-1 "2" :param-2 "3" :param-3 "4" :param-4 "5"} (first decoded-special-events-all)))
+             (is (= {:param-1 "5" :param-2 "4" :param-3 "3" :param-4 "2"} (last decoded-special-events-all)))
 
              (is (= "0xbeefbeefbeefbeefbeefbeefbeefbeefbeefbeef" (string/lower-case target)))
              (is (= (string/lower-case my-contract-address) (string/lower-case forwarder-target)))
