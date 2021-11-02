@@ -132,3 +132,14 @@
                  "It should filter by from-block and from-tx-lidx")
 
              (done)))))
+
+(deftest test-contract-send-output-interface
+  (async done
+         (go
+           (let [error-object (<! (smart-contracts/contract-send :my-contract :always-errors ["First fail"] {:output :receipt-or-error}))
+                 receipt-error-pair (<! (smart-contracts/contract-send :my-contract :always-errors ["Second fail"] {:output :receipt-error-pair}))]
+             (is (string/ends-with? (. error-object -message) "First fail" ))
+             (is (= 2 (count receipt-error-pair)))
+             (is (= nil (first receipt-error-pair)))
+             (is (string/ends-with? (. (last receipt-error-pair) -message) "Second fail"))
+             (done)))))

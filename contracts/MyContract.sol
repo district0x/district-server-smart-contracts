@@ -38,4 +38,8 @@ contract MyContract {
     onSpecialEvent(param1, param2, param3, param4);
     onSpecialEvent(param4, param3, param2, param1);
   }
+
+  function alwaysErrors(string message) public {
+    revert(message);
+  }
 }

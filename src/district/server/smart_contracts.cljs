@@ -145,22 +145,29 @@
    ## `method` is a :camel_case keyword corresponding to the smart-contract function
    ## `args` is a vector of arguments for the `method`
    ## `opts` is a map of options passed as message data
-   # returns:
-   function returns a Promise resolving to a tx receipt."
+   # Returns:
+     default: returns a Promise resolving to a tx receipt
+
+     This can be configured with :output keyword of `opts` values:
+       :receipt-or-nil - will return Tx receipt on success, nil in case of revert
+       :receipt-error-pair - returns vector consisting of [tx-receipt error-object]
+       :receipt-or-error - returns single object, Tx receipt in case of success, error-object (js/Error) in case of revert
+  "
   ([contract method args {:keys [:from :gas :ignore-forward?] :as opts}]
-   (promise-> (if from
-                (js/Promise.resolve [from])
-                (web3-eth/accounts @web3))
-              (fn [accounts]
-                (let [opts (merge {:from (first accounts)}
-                                  (when-not gas
-                                    {:gas 4000000})
-                                  (dissoc opts :ignore-forward?))]
-                  (-> (web3-eth/contract-send (instance-from-arg contract {:ignore-forward? ignore-forward?})
-                                              method
-                                              args
-                                              opts))))
-              #(web3-helpers/js->cljkk %)))
+   (go
+     (let [accounts (<! (web3-eth/accounts @web3))
+           account (or from (first accounts))
+           opts (merge {:from (first accounts)} (when-not gas {:gas 4000000}) (dissoc opts :ignore-forward?))
+           output-format (get opts :output :receipt-or-nil)
+           opts (dissoc opts :output)
+           result (<! (web3-eth/contract-send (instance-from-arg contract {:ignore-forward? ignore-forward?}) method args opts))
+           error? (= js/Error (type result))
+           tx-receipt (if (not error?) (web3-helpers/js->cljkk result))
+           error-object (if error? result)]
+       (case output-format
+         :receipt-or-nil (or tx-receipt nil)
+         :receipt-error-pair [tx-receipt error-object]
+         :receipt-or-error (or tx-receipt error-object)))))
   ([contract method args]
    (contract-send contract method args {}))
   ([contract method]
