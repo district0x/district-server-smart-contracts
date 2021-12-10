@@ -181,10 +181,11 @@
                                (fn [error evt]
                                  (if callbacks
                                    ;; if we have callbacks registered, fire this event in all of them
-                                   (let [enriched-evt (->> evt
+                                   (let [enriched-evt (if evt (->> evt
                                                            web3-helpers/js->cljkk
                                                            (#(assoc % :latest-event? latest-event?))
-                                                           (enrich-event-log contract contract-instance))]
+                                                           (enrich-event-log contract contract-instance))
+                                                        evt)]
                                      (doseq [callback callbacks]
                                        (callback error enriched-evt)))
 
