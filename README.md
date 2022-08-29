@@ -227,13 +227,13 @@ Opts you can pass:
                  (println "Finished calling callbacks"))})
 ```
 
-## Development
-```bash
-# Setup
-lein deps
-docker run --name=ganache -p 8545:8545 trufflesuite/ganache-cli:v6.12.1 -p 8545
+## Development, test & release
 
-# To run tests
-truffle migrate --network ganache --reset
-lein doo node "nodejs-tests" once
-```
+1. Build: `npx shadow-cljs compile test-node`
+  - also need to deploy contracts: `npx truffle migrate --network ganache --reset`
+2. Tests: `node out/node-tests.js`
+
+To release (happens automatically on CI at merge to master)
+
+1. Build: `clj -T:build jar`
+2. Release: `clj -T:build deploy`

@@ -17,7 +17,7 @@
   :once
   {:before (fn []
              (-> (mount/with-args
-                   {:web3 {:url "ws://127.0.0.1:8545",
+                   {:web3 {:url "ws://127.0.0.1:8549",
                            :on-online #(log/debug "Ethereum node went online")
                            :on-offline #(log/debug "Ethereum node went offline")}
                     :smart-contracts {:contracts-var #'tests.smart-contracts-test/smart-contracts}})
