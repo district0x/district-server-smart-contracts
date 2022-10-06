@@ -118,7 +118,7 @@
                  captured-events (atom [])
                  _ (<! (smart-contracts/contract-send :my-contract :double-increment-counter [1] {:gas 5000000}))
                  _ (<! (smart-contracts/contract-send :my-contract :double-increment-counter [1] {:gas 5000000}))
-                 past-events (<! (smart-contracts/replay-past-events-in-order events (fn [error {:keys [:args :event] :as e}]
+                 past-events (<! (smart-contracts/replay-past-events-in-order events (fn [error e]
                                                                                        (swap! captured-events conj ((juxt :block-number :transaction-index :log-index) e)))
                                                                               {:from-block (inc block-number)
                                                                                :to-block (<! (web3-eth/get-block-number @web3))
@@ -127,7 +127,6 @@
                                                                                :on-finish (fn []
                                                                                             (log/debug "Finished replaying past events"))}))
                  cleanup-tx (<! (smart-contracts/contract-send :my-contract :set-counter [1] {:gas 5000000}))]
-
              (is (= @captured-events [[(+ block-number 1) 0 1] [(+ block-number 2) 0 0] [(+ block-number 2) 0 1]])
                  "It should filter by from-block and from-tx-lidx")
 
