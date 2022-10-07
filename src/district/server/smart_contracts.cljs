@@ -60,13 +60,21 @@
 (defn update-contract! [contract-key contract]
   (swap! (:contracts @smart-contracts) update contract-key merge contract))
 
+(defn contracts-path [provided]
+  (let [from-env (js->clj (.-D0X_CONTRACTS_PATH (.-env process)))
+        default (str (.cwd process) "/resources/public/contracts/build/")
+        ensure-ending (fn [path ending]
+                        (if (clojure.string/ends-with? path ending) path (str path ending)))
+        chosen-path (or from-env provided default)]
+    (ensure-ending chosen-path "/")))
+
 (defn- fetch-contract
   "Given a file-name and a path tries to load abi and bytecode.
   It first try to load it from a json truffle artifact, if it doesn't find it
   tries .abi .bin files for the name.
   Returns a map with :abi and :bin keys."
   [file-name & [{:keys [:path]}]]
-  (let [path (or path (str (.cwd process) "/resources/public/contracts/build/"))
+  (let [path (contracts-path path)
         json-file-path (str path file-name ".json")
         abi-file-path (str path file-name ".abi")
         bin-file-path (str path file-name ".bin")]
