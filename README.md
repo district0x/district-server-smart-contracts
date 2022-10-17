@@ -194,7 +194,8 @@ Helps in case you have large number of events with slow callbacks, to prevent un
 Opts you can pass:
 * `:delay` - To put delay in between callbacks in ms
 * `:transform-fn` - Function to transform collection of events
-* `:on-finish` - Will be called after calling callback for all events
+* `:on-chunk` - Will be called after calling callback for each chunk
+* `:on-finish` - Will be called on the very end
 
 
 ```clojure

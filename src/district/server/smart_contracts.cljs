@@ -242,84 +242,94 @@
                                                (callback nil response)
                                                (js/setTimeout #(wait-for-block block-number callback) 1000))))))
 
+(defn all-chunks
+  "(all-chunks 100 125 10) => ([100 109] [110 119] [120 125])"
+  [from-block to-block step]
+  (let [first-chunk [from-block (min to-block (+ from-block (dec step)))]
+        next-chunk (fn [[from to]]
+                     (-> [(inc to) (+ to step)]
+                         (update 1 #(min % to-block))))]
+    (take-while (fn [[from to]] (<= from to-block))
+                (iterate next-chunk first-chunk))))
+
+(defn sort-and-skip-logs [transform-fn from-block skip-log-indexes logs]
+  (let [sorted-logs (sort-by (juxt :block-number :transaction-index :log-index) logs)
+        remove-log-indexes (if skip-log-indexes
+                             #(remove (fn [l]
+                                        (and (= (:block-number l) from-block)
+                                             (skip-log-indexes [(:transaction-index l) (:log-index l)]))) %)
+                             identity)]
+    (transform-fn (remove-log-indexes sorted-logs))))
+
+(defn chunk->logs [transform-fn from-block skip-log-indexes events ignore-forward? [from to] ch-output]
+  "async/>! to ch-output for chunk [from to]: final sorted, skipped and transformed logs as async/ch."
+  (let [sort-and-skip-logs' (partial sort-and-skip-logs transform-fn from-block skip-log-indexes)]
+    (async/go
+      (->> (for [[k [contract event]] events
+                 :let [contract-instance (instance-from-arg contract {:ignore-forward? ignore-forward?})
+                       ch-logs (async/chan 1)]]
+             (do
+               (web3-eth/get-past-events contract-instance
+                                         event
+                                         {:from-block from
+                                          :to-block to}
+                                         (fn [error events]
+                                           (let [logs (->> events
+                                                           web3-helpers/js->cljkk
+                                                           (map (partial enrich-event-log contract contract-instance)))]
+                                             (async/put! ch-logs (or logs [(with-meta {:err error} {:error? true})]))
+                                             (async/close! ch-logs))))
+               ch-logs))
+           (async/merge)
+           (async/reduce into [])
+           (async/<!)
+           (sort-and-skip-logs')
+           (async/>! ch-output))
+      (async/close! ch-output))))
+
 (defn replay-past-events-in-order
   "Replay all past events in order.
   :from-block specifies the first block number events should be dispatched.
   :skip-log-indexes, a set of tuples like [tx log-index] for the :from-block block that should be skipped."
-  [events callback {:keys [:from-block :skip-log-indexes :to-block :block-step
-                           :ignore-forward? :crash-on-event-fail?
-                           :transform-fn :on-finish]
-                    :or {transform-fn identity}
+  [events callback {:keys [from-block skip-log-indexes to-block block-step
+                           ignore-forward? crash-on-event-fail?
+                           transform-fn on-chunk on-finish]
+                    :or {transform-fn identity
+                         on-chunk :do-nothing
+                         on-finish :do-nothing}
                     :as opts}]
 
   (when (and skip-log-indexes (not from-block ))
     (throw (js/Error. "replay-past-events-in-order: Can't specify skip-log-indexes without specifying :from-block")))
 
-  (let [log-order-triplet (juxt :block-number :transaction-index :log-index)
-        from-blocks (range from-block to-block block-step)
-        last-from (last from-blocks)
-        from-blocks (concat from-blocks [(+ block-step last-from)])
-        logs-chans (for [[k [contract event]] events
-                         from from-blocks]
-                     (let [logs-ch (async/promise-chan)
-                           contract-instance (instance-from-arg contract {:ignore-forward? ignore-forward?})
-                           to (min to-block (+ from (dec block-step)))]
+  (let [ch-chunks-to-process (async/to-chan! (all-chunks from-block to-block block-step))
+        ch-final-logs (async/chan 1)
+        chunk->logs' (partial chunk->logs transform-fn from-block skip-log-indexes events ignore-forward?)]
+    (async/pipeline-async 10 ch-final-logs chunk->logs' ch-chunks-to-process)
+    (go-loop [chunk-logs (async/<! ch-final-logs)]
+      (if chunk-logs
+        (do
+          (when (fn? callback)
+            (doseq [log chunk-logs]
+              (let [res (try
+                          (if-let [?error (:error? (meta log))]
+                            (callback ?error nil)
+                            (callback nil log))
+                          (catch js/Error e
+                            (when crash-on-event-fail?
+                              (log/error e "Server crash. Caused by event processing error with :crash-on-event-fail? true. Disable this flag to skip and continue.")
+                              (.exit js/process 1))))]
+                ;; if callback returns a promise or chan we block until it resolves
+                (cond
+                  (satisfies? cljs.core.async.impl.protocols/ReadPort res)
+                  (<! res)
 
-                       (log/debug "Processing chunk of blocks" {:contract contract
-                                                                :event event
-                                                                :from from
-                                                                :to to})
+                  (async-helpers/promise? res)
+                  (<! (async-helpers/promise->chan res))))))
+          (on-chunk chunk-logs)
+          (recur (async/<! ch-final-logs)))
 
-                       (web3-eth/get-past-events contract-instance
-                                                 event
-                                                 {:from-block from
-                                                  :to-block to}
-                                                 (fn [error events]
-                                                   (let [logs (->> events
-                                                                   web3-helpers/js->cljkk
-                                                                   (map (partial enrich-event-log contract contract-instance)))]
-                                                     (async/put! logs-ch {:err error :logs logs}))))
-                       logs-ch))]
-
-    ;; go chan by chan collecting events
-    (go-loop [all-logs []
-              [logs-ch & rest-logs] logs-chans]
-      (if logs-ch
-        (let [{:keys [:err :logs]} (async/<! logs-ch)
-              logs (map #(assoc % :err err) logs)]
-          ;; keep collecting
-          (recur (into all-logs logs) rest-logs))
-
-        ;; no more channels to read, sort and callback
-        (let [sorted-logs (cond->> (sort-by log-order-triplet all-logs)
-
-                            skip-log-indexes (remove (fn [l]
-                                                       (and (= (:block-number l) from-block)
-                                                            (skip-log-indexes [(:transaction-index l) (:log-index l)]))))
-                            true             transform-fn)]
-          (go-loop [logs sorted-logs]
-            (if (seq logs)
-              (do
-                (let [first-log (first logs)]
-
-                  (when (fn? callback)
-                    (doseq [res (try
-                                  (callback (:err first-log) (dissoc first-log :err))
-                                  (catch js/Error e
-                                    (when crash-on-event-fail?
-                                      (log/error "Server crash. Caused by event processing error with :crash-on-event-fail? true. Disable this flag to skip and continue.")
-                                      (.exit js/process 1))))]
-                      ;; if callback returns a promise or chan we block until it resolves
-                      (cond
-                        (satisfies? cljs.core.async.impl.protocols/ReadPort res)
-                        (<! res)
-
-                        (async-helpers/promise? res)
-                        (<! (async-helpers/promise->chan res))))))
-                (recur (rest logs)))
-
-              (when (fn? on-finish)
-                (on-finish sorted-logs)))))))))
+        (on-finish)))))
 
 (defn start [{:keys [:contracts-var] :as opts}]
   (merge
