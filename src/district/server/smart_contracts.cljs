@@ -311,7 +311,7 @@
         (do
           (when (fn? callback)
             (doseq [log chunk-logs]
-              (let [res (try
+              (doseq [res (try
                           (if-let [?error (:error? (meta log))]
                             (callback ?error nil)
                             (callback nil log))
