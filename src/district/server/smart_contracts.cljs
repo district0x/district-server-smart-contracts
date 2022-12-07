@@ -2,7 +2,7 @@
   (:require [cljs-web3-next.core :as web3-core]
             [cljs-web3-next.eth :as web3-eth]
             [cljs-web3-next.helpers :as web3-helpers]
-            [cljs.core.async :refer [<! timeout] :as async]
+            [cljs.core.async :refer [<! >! timeout] :as async]
             [cljs.core.async.impl.protocols]
             [cljs.nodejs :as nodejs]
             [clojure.set :as clojure-set]
@@ -261,34 +261,8 @@
                              identity)]
     (transform-fn (remove-log-indexes sorted-logs))))
 
-#_(defn chunk->logs [transform-fn from-block skip-log-indexes events ignore-forward? [from to] ch-output]
-    "async/>! to ch-output for chunk [from to]: final sorted, skipped and transformed logs as async/ch."
-    (let [sort-and-skip-logs' (partial sort-and-skip-logs transform-fn from-block skip-log-indexes)]
-      (async/go
-        (->> (for [[k [contract event]] events
-                   :let [contract-instance (instance-from-arg contract {:ignore-forward? ignore-forward?})
-                         ch-logs (async/chan 1)]]
-               (do
-                 (web3-eth/get-past-events contract-instance
-                                           event
-                                           {:from-block from
-                                            :to-block to}
-                                           (fn [error events]
-                                             (let [logs (->> events
-                                                             web3-helpers/js->cljkk
-                                                             (map (partial enrich-event-log contract contract-instance)))]
-                                               (async/put! ch-logs (or logs [(with-meta {:err error} {:error? true})]))
-                                               (async/close! ch-logs))))
-                 ch-logs))
-             (async/merge)
-             (async/reduce into [])
-             (async/<!)
-             (sort-and-skip-logs')
-             (async/>! ch-output))
-        (async/close! ch-output))))
-
 (defn chunk->logs [transform-fn from-block skip-log-indexes events ignore-forward? [from to] ch-output]
-  "async/>! to ch-output for chunk [from to]: final sorted, skipped and transformed logs as async/ch."
+  ">! to ch-output for chunk [from to]: final sorted, skipped and transformed logs as async/ch."
   (let [sort-and-skip-logs' (partial sort-and-skip-logs transform-fn from-block skip-log-indexes)
         ch-logs (async/chan 1)
         event->logs (fn [[k [contract event]] ch-logs-output]
@@ -301,16 +275,16 @@
                                                     (let [logs (map (partial enrich-event-log contract contract-instance)
                                                                     (web3-helpers/js->cljkk events))]
                                                       (async/put! ch-logs-output (or logs [(with-meta {:err error} {:error? true})])))))))]
-    (async/go-loop [all-logs []
-                    [event & rest-events] events]
+    (go-loop [all-logs []
+              [event & rest-events] events]
       (if event
         (do
           (event->logs event ch-logs)
-          (recur (into all-logs (async/<! ch-logs))
+          (recur (into all-logs (<! ch-logs))
                  rest-events))
         (do
           (async/close! ch-logs)
-          (async/>! ch-output (sort-and-skip-logs' all-logs))
+          (>! ch-output (sort-and-skip-logs' all-logs))
           (async/close! ch-output))))))
 
 (defn replay-past-events-in-order
@@ -326,26 +300,41 @@
                          on-finish :do-nothing}
                     :as opts}]
 
-  (when (and skip-log-indexes (not from-block ))
+  (when (and skip-log-indexes (not from-block))
     (throw (js/Error. "replay-past-events-in-order: Can't specify skip-log-indexes without specifying :from-block")))
 
   (let [ch-chunks-to-process (async/to-chan! (all-chunks from-block to-block block-step))
         ch-final-logs (async/chan 1)
-        chunk->logs' (partial chunk->logs transform-fn from-block skip-log-indexes events ignore-forward?)]
-    (async/pipeline-async chunks-parallelism ch-final-logs chunk->logs' ch-chunks-to-process)
-    (go-loop [chunk-logs (async/<! ch-final-logs)]
-      (if chunk-logs
+        chunk->logs' (partial chunk->logs transform-fn from-block skip-log-indexes events ignore-forward?)
+        chs-await-for-workers (for [n (range chunks-parallelism)]
+                               (async/chan 1))
+        workers (dotimes [n chunks-parallelism]
+                  (go-loop []
+                    (try
+                      (if-let [chunk (<! ch-chunks-to-process)]
+                        (let [ch-wait (async/chan 1)]
+                          (chunk->logs' chunk ch-wait)
+                          (>! ch-final-logs (<! ch-wait))
+                          (recur))
+                        (async/close! (nth chs-await-for-workers n)))
+                      (catch ExceptionInfo e
+                        (log/error e)))))
+        all-workers-finished (go-loop []
+                               (<! (async/merge chs-await-for-workers))
+                               (async/close! ch-final-logs))]
+    (go-loop []
+      (if-let [chunk-logs (<! ch-final-logs)]
         (do
           (when (fn? callback)
             (doseq [log chunk-logs]
               (doseq [res (try
-                          (if-let [?error (:error? (meta log))]
-                            (callback ?error nil)
-                            (callback nil log))
-                          (catch js/Error e
-                            (when crash-on-event-fail?
-                              (log/error e "Server crash. Caused by event processing error with :crash-on-event-fail? true. Disable this flag to skip and continue.")
-                              (.exit js/process 1))))]
+                            (if-let [?error (:error? (meta log))]
+                              (callback ?error nil)
+                              (callback nil log))
+                            (catch js/Error e
+                              (when crash-on-event-fail?
+                                (log/error e "Server crash. Caused by event processing error with :crash-on-event-fail? true. Disable this flag to skip and continue.")
+                                (.exit js/process 1))))]
                 ;; if callback returns a promise or chan we block until it resolves
                 (cond
                   (satisfies? cljs.core.async.impl.protocols/ReadPort res)
@@ -354,7 +343,7 @@
                   (async-helpers/promise? res)
                   (<! (async-helpers/promise->chan res))))))
           (on-chunk chunk-logs)
-          (recur (async/<! ch-final-logs)))
+          (recur))
 
         (on-finish)))))
 
