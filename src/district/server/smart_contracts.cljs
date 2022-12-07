@@ -274,7 +274,6 @@
                                            {:from-block from
                                             :to-block to}
                                            (fn [error events]
-                                             (println 111111)
                                              (let [logs (->> events
                                                              web3-helpers/js->cljkk
                                                              (map (partial enrich-event-log contract contract-instance)))]
@@ -290,27 +289,29 @@
 
 (defn chunk->logs [transform-fn from-block skip-log-indexes events ignore-forward? [from to] ch-output]
   "async/>! to ch-output for chunk [from to]: final sorted, skipped and transformed logs as async/ch."
-  (async/go
-    (let [sort-and-skip-logs' (partial sort-and-skip-logs transform-fn from-block skip-log-indexes)
-          ch-logs (async/chan 1)
-          event->logs (fn [[k [contract event]] ch-logs-output]
-                        (let [contract-instance (instance-from-arg contract {:ignore-forward? ignore-forward?})]
-                          (web3-eth/get-past-events contract-instance
-                                                    event
-                                                    {:from-block from
-                                                     :to-block to}
-                                                    (fn [error events]
-                                                      (let [logs (->> events
-                                                                      web3-helpers/js->cljkk
-                                                                      (map (partial enrich-event-log contract contract-instance)))]
-                                                        (async/put! ch-logs-output (or logs [(with-meta {:err error} {:error? true})]))
-                                                        (async/close! ch-logs-output))))))]
-      (async/pipeline-async 1 ch-logs event->logs (async/to-chan! events))
-      (->> (async/reduce into [] ch-logs)
-           (async/<!)
-           (sort-and-skip-logs')
-           (async/>! ch-output))
-      (async/close! ch-output))))
+  (let [sort-and-skip-logs' (partial sort-and-skip-logs transform-fn from-block skip-log-indexes)
+        ch-logs (async/chan 1)
+        event->logs (fn [[k [contract event]] ch-logs-output]
+                      (let [contract-instance (instance-from-arg contract {:ignore-forward? ignore-forward?})]
+                        (web3-eth/get-past-events contract-instance
+                                                  event
+                                                  {:from-block from
+                                                   :to-block to}
+                                                  (fn [error events]
+                                                    (let [logs (map (partial enrich-event-log contract contract-instance)
+                                                                    (web3-helpers/js->cljkk events))]
+                                                      (async/put! ch-logs-output (or logs [(with-meta {:err error} {:error? true})])))))))]
+    (async/go-loop [all-logs []
+                    [event & rest-events] events]
+      (if event
+        (do
+          (event->logs event ch-logs)
+          (recur (into all-logs (async/<! ch-logs))
+                 rest-events))
+        (do
+          (async/close! ch-logs)
+          (async/>! ch-output (sort-and-skip-logs' all-logs))
+          (async/close! ch-output))))))
 
 (defn replay-past-events-in-order
   "Replay all past events in order.
