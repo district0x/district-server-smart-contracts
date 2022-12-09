@@ -328,8 +328,8 @@
           (when (fn? callback)
             (doseq [log chunk-logs]
               (doseq [res (try
-                            (if-let [?error (:error? (meta log))]
-                              (callback ?error nil)
+                            (if (:error? (meta log))
+                              (callback log nil)
                               (callback nil log))
                             (catch js/Error e
                               (when crash-on-event-fail?
