@@ -261,20 +261,42 @@
                              identity)]
     (transform-fn (remove-log-indexes sorted-logs))))
 
+(defn get-events-with-retry [contract-instance contract event from to ch-logs retry-count]
+  (web3-eth/get-past-events contract-instance
+                          event
+                          {:from-block from
+                           :to-block to}
+                          (fn [error events]
+                            (if (and error (< retry-count 10))
+                              (do
+                                (let [wait-time (int (* 500 (inc retry-count) (inc (rand))))]
+                                  (log/info "Error fetching events. Retrying" {:retry-count retry-count
+                                                                               :contract contract
+                                                                               :event event
+                                                                               :from from
+                                                                               :to to
+                                                                               :error error
+                                                                               :wait-time wait-time})
+                                  (js/setTimeout
+                                    (fn []
+                                      (get-events-with-retry contract-instance contract event from to ch-logs (inc retry-count)))
+                                    wait-time)))
+                              (let [logs (->> events
+                                              web3-helpers/js->cljkk
+                                              (map (partial enrich-event-log contract contract-instance)))]
+                                (async/put! ch-logs (if error [(with-meta {:err error} {:error? true})] logs)))))))
+
 (defn chunk->logs [transform-fn from-block skip-log-indexes events ignore-forward? [from to] ch-output]
   ">! to ch-output for chunk [from to]: final sorted, skipped and transformed logs as async/ch."
   (let [sort-and-skip-logs' (partial sort-and-skip-logs transform-fn from-block skip-log-indexes)
         ch-logs (async/chan 1)
         event->logs (fn [[k [contract event]] ch-logs-output]
                       (let [contract-instance (instance-from-arg contract {:ignore-forward? ignore-forward?})]
-                        (web3-eth/get-past-events contract-instance
-                                                  event
-                                                  {:from-block from
-                                                   :to-block to}
-                                                  (fn [error events]
-                                                    (let [logs (map (partial enrich-event-log contract contract-instance)
-                                                                    (web3-helpers/js->cljkk events))]
-                                                      (async/put! ch-logs-output (or logs [(with-meta {:err error} {:error? true})])))))))]
+                        (log/debug "Processing chunk of blocks" {:contract contract
+                                                                 :event event
+                                                                 :from from
+                                                                 :to to})
+                        (get-events-with-retry contract-instance contract event from to ch-logs-output 0)))]
     (go-loop [all-logs []
               [event & rest-events] events]
       (if event
