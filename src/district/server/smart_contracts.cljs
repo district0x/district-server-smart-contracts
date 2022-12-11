@@ -282,7 +282,8 @@
                                  (let [log (<! buf)]
                                    (if (and (:error? (meta log))
                                             (< 0 re-try-iteration))
-                                     (recur (dec re-try-iteration))
+                                     (do (<! (async/timeout 1000))
+                                         (recur (dec re-try-iteration)))
                                      (>! ch-output log))))))]
     (go-loop [all-logs []
               [event & rest-events] events]
