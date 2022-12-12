@@ -261,7 +261,7 @@
                              identity)]
     (transform-fn (remove-log-indexes sorted-logs))))
 
-(defn chunk->logs [transform-fn from-block skip-log-indexes events ignore-forward? [from to] ch-output]
+(defn chunk->logs [transform-fn from-block skip-log-indexes events ignore-forward? re-try [from to] ch-output]
   ">! to ch-output for chunk [from to]: final sorted, skipped and transformed logs as async/ch."
   (let [sort-and-skip-logs' (partial sort-and-skip-logs transform-fn from-block skip-log-indexes)
         ch-logs (async/chan 1)
@@ -274,12 +274,22 @@
                                                   (fn [error events]
                                                     (let [logs (map (partial enrich-event-log contract contract-instance)
                                                                     (web3-helpers/js->cljkk events))]
-                                                      (async/put! ch-logs-output (or logs [(with-meta {:err error} {:error? true})])))))))]
+                                                      (async/put! ch-logs-output (or logs [(with-meta {:err error} {:error? true})])))))))
+        re-try-event->logs (fn [event ch-output]
+                             (let [buf (async/chan 1)]
+                               (go-loop [re-try-iteration re-try]
+                                 (event->logs event buf)
+                                 (let [log (<! buf)]
+                                   (if (and (:error? (meta log))
+                                            (< 0 re-try-iteration))
+                                     (do (<! (async/timeout 1000))
+                                         (recur (dec re-try-iteration)))
+                                     (>! ch-output log))))))]
     (go-loop [all-logs []
               [event & rest-events] events]
       (if event
         (do
-          (event->logs event ch-logs)
+          (re-try-event->logs event ch-logs)
           (recur (into all-logs (<! ch-logs))
                  rest-events))
         (do
@@ -292,9 +302,10 @@
   :from-block specifies the first block number events should be dispatched.
   :skip-log-indexes, a set of tuples like [tx log-index] for the :from-block block that should be skipped."
   [events callback {:keys [from-block skip-log-indexes to-block block-step chunks-parallelism
-                           ignore-forward? crash-on-event-fail?
+                           ignore-forward? crash-on-event-fail? re-try
                            transform-fn on-chunk on-finish]
                     :or {chunks-parallelism 1
+                         re-try 3
                          transform-fn identity
                          on-chunk :do-nothing
                          on-finish :do-nothing}
@@ -305,7 +316,7 @@
 
   (let [ch-chunks-to-process (async/to-chan! (all-chunks from-block to-block block-step))
         ch-final-logs (async/chan 1)
-        chunk->logs' (partial chunk->logs transform-fn from-block skip-log-indexes events ignore-forward?)
+        chunk->logs' (partial chunk->logs transform-fn from-block skip-log-indexes events ignore-forward? re-try)
         chs-await-for-workers (for [n (range chunks-parallelism)]
                                (async/chan 1))
         workers (dotimes [n chunks-parallelism]
@@ -328,8 +339,8 @@
           (when (fn? callback)
             (doseq [log chunk-logs]
               (doseq [res (try
-                            (if-let [?error (:error? (meta log))]
-                              (callback ?error nil)
+                            (if (:error? (meta log))
+                              (callback log nil)
                               (callback nil log))
                             (catch js/Error e
                               (when crash-on-event-fail?
